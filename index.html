@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Fraturas — Fixação de Conteúdo | IVI</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--green:#6AAD2A;--gd:#3B6D11;--gl:#EAF3DE;--gm:#C0DD97;--red:#E3383A;--rd:#A32D2D;--rl:#FCEBEB;--gy:#9E9E9E;--gyl:#F5F5F5;--gym:#E0E0E0;--tx:#1a1a1a;--tm:#666;--th:#999;--wh:#fff;--r:12px;--rs:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito Sans',sans-serif;background:#f0f4eb;color:var(--tx);padding-bottom:60px}
+/* header */
+.hdr{background:var(--green);position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(106,173,42,.25)}
+.hi{max-width:780px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:14px}
+.lgr{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:40px;flex-shrink:0}
+.lgr div{border-radius:3px;height:18px}
+.l1{background:rgba(255,255,255,.3)}.l2{background:rgba(255,255,255,.75)}.l3{background:rgba(255,255,255,.5)}.l4{background:rgba(255,255,255,.75)}
+.ht{font-family:'Nunito',sans-serif;font-size:17px;font-weight:700;color:#fff;line-height:1.2}
+.hs{font-size:12px;color:rgba(255,255,255,.8);margin-top:2px}
+.b30{margin-left:auto;background:var(--red);color:#fff;font-family:'Nunito',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.pw{background:rgba(255,255,255,.25);height:4px}
+.pf{background:#fff;height:100%;transition:width .4s;width:0%}
+/* main */
+.mn{max-width:780px;margin:0 auto;padding:28px 16px 0}
+/* card base */
+.cd{background:var(--wh);border-radius:var(--r);box-shadow:0 2px 12px rgba(0,0,0,.08);padding:20px 24px;margin-bottom:20px}
+.cd.top-green{border-top:4px solid var(--green)}
+.cd.top-sheets{border-top:4px solid #0F9D58;display:none}
+.cd.top-sheets.show{display:block}
+/* identificacao */
+.cd h2{font-family:'Nunito',sans-serif;font-size:15px;font-weight:700;color:var(--gd);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.cd h2::before{content:'';display:inline-block;width:4px;height:16px;background:var(--green);border-radius:2px}
+.ir{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.ir{grid-template-columns:1fr}}
+.if label{display:block;font-size:11px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.if input{width:100%;border:1.5px solid var(--gym);border-radius:var(--rs);padding:9px 12px;font-size:14px;font-family:'Nunito Sans',sans-serif;color:var(--tx);background:var(--gyl);outline:none;transition:border-color .2s,box-shadow .2s}
+.if input:focus{border-color:var(--green);background:#fff;box-shadow:0 0 0 3px rgba(106,173,42,.15)}
+/* progresso */
+.pl{font-size:13px;color:var(--tm);margin-bottom:18px}
+.pl span{font-weight:600;color:var(--gd)}
+/* questao */
+.qc{background:var(--wh);border-radius:var(--r);box-shadow:0 2px 12px rgba(0,0,0,.08);padding:20px 22px;margin-bottom:14px;border-left:4px solid var(--gm);transition:border-color .3s}
+.qc.answered{border-left-color:var(--green)}
+.qc.has-err{border-left-color:var(--red)}
+.qn{font-size:10px;font-weight:700;color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.qnd{width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.qt{font-size:14px;line-height:1.65;color:var(--tx);margin-bottom:14px;font-weight:500}
+.qiw{margin-bottom:14px;text-align:center;background:#f8f8f8;border-radius:var(--rs);padding:10px;border:1px solid var(--gym)}
+.qi{max-width:100%;max-height:220px;border-radius:6px;display:block;margin:0 auto;object-fit:contain}
+.qic{font-size:11px;color:var(--th);margin-top:6px;font-style:italic}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border:1.5px solid var(--gym);border-radius:var(--rs);cursor:pointer;transition:all .15s;background:#fafafa;user-select:none}
+.opt:hover,.opt.sel{border-color:var(--green);background:var(--gl)}
+.opt.ok{border-color:var(--gd);background:var(--gl);pointer-events:none}
+.opt.ng{border-color:var(--rd);background:var(--rl);pointer-events:none}
+.opt.dis{pointer-events:none;opacity:.5}
+.or{width:17px;height:17px;border-radius:50%;border:2px solid var(--gy);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.opt.sel .or,.opt.ok .or{border-color:var(--green);background:var(--green)}
+.opt.ng .or{border-color:var(--rd);background:var(--rd)}
+.od{width:6px;height:6px;border-radius:50%;background:#fff;display:none}
+.opt.sel .od,.opt.ok .od,.opt.ng .od{display:block}
+.ol{font-size:11px;font-weight:700;color:var(--tm);min-width:16px;margin-top:1px;flex-shrink:0}
+.opt.sel .ol,.opt.ok .ol{color:var(--gd)}
+.opt.ng .ol{color:var(--rd)}
+.ot{font-size:13.5px;line-height:1.5;color:var(--tx)}
+.fb{display:none;margin-top:10px;padding:10px 13px;border-radius:var(--rs);font-size:13px;line-height:1.55}
+.fb.show{display:block}
+.fb.ok{background:var(--gl);border:1px solid var(--green);color:var(--gd)}
+.fb.ng{background:var(--rl);border:1px solid var(--red);color:var(--rd)}
+/* resultado */
+.rc{background:var(--wh);border-radius:var(--r);box-shadow:0 4px 24px rgba(0,0,0,.12);padding:32px 24px;text-align:center;margin-bottom:20px;display:none;border-top:5px solid var(--green)}
+.rc.show{display:block}
+.sr{width:100px;height:100px;border-radius:50%;border:4px solid var(--green);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 16px;background:var(--gl)}
+.sn{font-family:'Nunito',sans-serif;font-size:30px;font-weight:800;color:var(--green);line-height:1}
+.sd{font-size:12px;color:var(--tm);margin-top:2px}
+.rt{font-family:'Nunito',sans-serif;font-size:20px;font-weight:700;color:var(--gd);margin-bottom:6px}
+.rs{font-size:14px;color:var(--tm);margin-bottom:20px}
+.str{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
+.st{background:var(--gyl);border-radius:var(--rs);padding:12px 8px;text-align:center;border:1px solid var(--gym)}
+.stn{font-family:'Nunito',sans-serif;font-size:22px;font-weight:800}
+.stl{font-size:11px;color:var(--tm);margin-top:2px}
+.st.g .stn{color:var(--gd)}.st.r .stn{color:var(--rd)}.st.v .stn{color:var(--green)}
+.brev{margin-top:16px;background:transparent;color:var(--green);border:1.5px solid var(--green);border-radius:var(--rs);padding:9px 24px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Nunito Sans',sans-serif;transition:all .15s}
+.brev:hover{background:var(--gl)}
+/* sheets guide */
+.sg h3{font-family:'Nunito',sans-serif;font-size:15px;font-weight:700;color:#0F9D58;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sg h3::before{content:'';display:inline-block;width:4px;height:16px;background:#0F9D58;border-radius:2px}
+.sl{list-style:none;display:flex;flex-direction:column;gap:12px}
+.sl li{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.55}
+.snum{width:22px;height:22px;border-radius:50%;background:#0F9D58;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.sl a{color:#0F9D58;font-weight:600}
+code{background:var(--gyl);border:1px solid var(--gym);padding:1px 6px;border-radius:4px;font-size:12px;font-family:monospace}
+/* submit */
+.sw{text-align:center;margin-top:24px}
+.bsub{background:var(--green);color:#fff;border:none;border-radius:var(--rs);padding:14px 0;font-size:16px;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;width:100%;max-width:360px;transition:background .15s,transform .1s}
+.bsub:hover{background:var(--gd)}
+.bsub:active{transform:scale(.98)}
+/* overlay */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center}
+.ov.show{display:flex}
+.ob{background:#fff;border-radius:var(--r);padding:32px 40px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+.osp{width:40px;height:40px;border:3px solid var(--gm);border-top-color:var(--green);border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ob p{font-size:14px;color:var(--tm)}
+.ft{text-align:center;padding:28px 16px 0;font-size:12px;color:var(--th)}
+</style>
+</head>
+<body>
+
+<div class="ov" id="ov">
+  <div class="ob">
+    <div class="osp"></div>
+    <p>Enviando respostas...<br>Aguarde um momento.</p>
+  </div>
+</div>
+
+<header class="hdr">
+  <div class="hi">
+    <div class="lgr"><div class="l1"></div><div class="l2"></div><div class="l3"></div><div class="l4"></div></div>
+    <div><div class="ht">Fraturas — Fixação de Conteúdo</div><div class="hs">Radiologia Veterinária · Pós-graduação EAD · 14 questões</div></div>
+    <div class="b30">30 anos IVI</div>
+  </div>
+  <div class="pw"><div class="pf" id="pf"></div></div>
+</header>
+
+<main class="mn">
+
+  <!-- GUIA SHEETS (aparece após envio) -->
+  <div class="cd top-sheets sg" id="sg">
+    <h3>📊 Como receber respostas no Google Sheets</h3>
+    <ol class="sl">
+      <li><div class="snum">1</div><div>No arquivo HTML, localize a linha <code>const DEST = 'SEU-EMAIL-AQUI'</code> e substitua pelo seu e-mail real.</div></li>
+      <li><div class="snum">2</div><div>Hospede o arquivo em qualquer servidor (ex: <a href="https://pages.github.com" target="_blank">GitHub Pages</a> — gratuito) ou use o <strong>Live Server</strong> do VS Code para testes.</div></li>
+      <li><div class="snum">3</div><div>Na primeira resposta, o FormSubmit envia um e-mail de ativação. Clique em <strong>"Confirm your submission"</strong>.</div></li>
+      <li><div class="snum">4</div><div>Acesse <a href="https://formsubmit.co" target="_blank">formsubmit.co</a> → faça login → vá em <strong>Integrations → Google Sheets</strong> e cole o link da sua planilha.</div></li>
+      <li><div class="snum">5</div><div>Pronto! Cada envio gera uma nova linha na planilha com: data, nome, e-mail, pontuação e todas as respostas. ✅</div></li>
+    </ol>
+  </div>
+
+  <!-- IDENTIFICAÇÃO -->
+  <div class="cd top-green">
+    <h2>Identificação do aluno</h2>
+    <div class="ir">
+      <div class="if"><label>Nome completo *</label><input type="text" id="nm" placeholder="Digite seu nome..."/></div>
+      <div class="if"><label>E-mail *</label><input type="email" id="em" placeholder="seu@email.com"/></div>
+    </div>
+  </div>
+
+  <div class="pl"><span id="pn">0</span> de 14 questões respondidas</div>
+
+  <div id="qs"></div>
+
+  <!-- RESULTADO -->
+  <div class="rc" id="rc">
+    <div class="sr"><div class="sn" id="sn">0</div><div class="sd">de 14</div></div>
+    <div class="rt" id="rt"></div>
+    <div class="rs" id="rs"></div>
+    <div class="str">
+      <div class="st g"><div class="stn" id="sc">0</div><div class="stl">Corretas</div></div>
+      <div class="st r"><div class="stn" id="sw">0</div><div class="stl">Erradas</div></div>
+      <div class="st v"><div class="stn" id="sp">0%</div><div class="stl">Aproveitamento</div></div>
+    </div>
+    <br>
+    <button class="brev" onclick="document.getElementById('qcard-0').scrollIntoView({behavior:'smooth'})">Ver gabarito completo ↑</button>
+  </div>
+
+  <div class="sw"><button class="bsub" id="bs" onclick="send()">Enviar respostas</button></div>
+  <div class="ft">Instituto Veterinário de Imagem — IVI · 30 anos</div>
+</main>
+
+<script>
+// ⚙️ CONFIGURAÇÃO — troque pelo e-mail da professora
+const DEST = 'giselle2006costa@gmail.com';
+
+const Q=[
+{n:1,text:"Em uma radiografia evidencia fraturas perpendiculares ao eixo longo do osso, de cortical a cortical, sem evidências de múltiplos fragmentos. Classifique a fratura quanto à extensão e ao eixo:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVCDWes6mXDgIXckO3j-6a-4RM55zzfPrW3Xb_yZAjd4VhkkQ-h5IcEJKYmE6JUbiC0vIU_aFJ4AHlyzWfd_kU9KtlJNzine_XrIiYLc0ZL7eK9jfrBvH8QXpJ2_Zb9tXAtaip70Z7y8vVd8wACVfq1q9pZTQFC4yNxKRticuODXOpgesw4YeVFgpYGtOgyUA7NdfXzA5QcEPUc=w200",opts:["Fraturas simples incompleta e oblíqua","Fraturas simples completa e transversa","Fraturas em espiral completa e cominutiva","Fraturas oblíqua completa e simples"],ans:1,hint:"Perpendicular ao eixo = traço transverso. De cortical a cortical = fratura completa. Sem múltiplos fragmentos = simples."},
+{n:2,text:"Assinale a alternativa que descreve corretamente a localização da fratura:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVBgefkUs1PQVkDHhC_WlK9eIO_iWY3D7wfvpC5LSf0o2kBV-wqgw1n-jxgu1CITpK36-2Co_IDIWkPPsbxxS7E-Vbioau7gwPkZIet5ivaRYsXLuL22zkG9_lHvq71rNMqeTfCtpKYTY5RhyinRYSKIk8jw4rk8IUkfV71aOH_zG2wXtJWqyRPoXUx7OECgedv45MlUx47o1iQ=w357",opts:["Terço proximal da epífise femoral","Terço mediodistal da diáfise femoral","Terço médio da metáfise femoral","Terço proximal da diáfise femoral","Terço distal da epífise femoral"],ans:3,hint:"Porção cilíndrica do osso (diáfise), região proximal. Não envolve epífise nem metáfise."},
+{n:3,text:"Com base nos achados, classifique a fratura segundo Salter-Harris:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVCx-MtR6Hl8AlCkTUYBpbysOMq9qTad_edx8cniu4zz1UUVaQ8dguqhBHByPkMFrZp6tOoqHSXza86eJVBEm1g2FYFZs842c42XUBRooeb8Vu5TJk2EznLqpwOcpwRtgEQ84gieKRGHr6hFqTQVAeopWuXQId7-TY6Y73LA09T7HDP4X3kWC0Ti9qZRMdkpRrBYfQjQuqLPU3iQ=w225",opts:["Fratura Salter-Harris tipo I","Fratura Salter-Harris tipo II","Fratura Salter-Harris tipo III","Fratura Salter-Harris tipo IV","Fratura Salter-Harris tipo V"],ans:1,hint:"Tipo II: fise + extensão pela metáfise, sem envolver epífise. O mais comum. Tipo I = só a fise; Tipo II = fise + metáfise."},
+{n:4,text:"Em uma radiografia de um animal jovem evidencia o deslocamento dorsal do núcleo de ossificação da tuberosidade da tíbia. Assinale a alternativa que classifica corretamente o tipo de fratura:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVD4fanndqeyzQpmAWD_lSuVbO-1XP70gaWuBhymqHMQwbBZbkJg4QEoLkvr5ON8A1O5RRDoO18Tm-_3eLpiTjqqW3BobGTUW_AVnzmiMH6acrRkDHdMvLXNRk2peWPmI42d0N9RKPkuuGu7JDdRhA7PNnvF4ny8tU7P68OKGhMI_95Ci-25YtnUZ_eSwLhHTjWP6c4WL6_4B8E9=w338",opts:["Fratura transversa","Fratura espiral","Fratura cominutiva","Fratura por avulsão","Fratura incompleta"],ans:3,hint:"Tuberosidade da tíbia = inserção do ligamento patelar. Força de tração arranca fragmento = fratura por avulsão. Clássica em animais jovens."},
+{n:5,text:"A imagem radiográfica evidencia uma área linear radiotransparente visibilizada na cortical óssea caudal do terço médio da diáfise umeral, indicada pela seta. Assinale a alternativa que descreve corretamente o achado:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVBeflikIKW9_i8bS4BH6rav40UrEyhHcXCEcOwsIkCwsIkCwsIkCwsIkCwsIkCwsIkC",opts:["Fratura incompleta da cortical óssea","Fratura transversa do úmero","Forame nutrício","Fratura por estresse","Lesão osteolítica patológica"],ans:2,hint:"Forame nutrício é estrutura normal — linha radiotransparente com localização previsível, bordas regulares, sem correlação clínica de fratura."},
+{n:6,text:"A imagem radiográfica evidencia fratura com linha de traço helicoidal ao longo do eixo do osso, com descontinuidade completa da cortical e ausência de fragmentos adicionais. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVBFqOyX06gcm210_KbW4-2_rrzSOqJO2RUAWnyt1PWy3esaRgXaSgKlqh7sVoQ_HJDCM9jQ03grQ089aakZnPDvJw4P7BJ5eQ4-tqnXqhvS3ywzEZa3ZvnXh-Q1eCc-QOopqYn7V1DDikHtYxfLM5vnToPSkD100HfPzNbSaObifZGoJ2-CA_Gw4_6K9b8jqjLTc3x-_fT19rr4=w341",opts:["Fratura incompleta simples oblíqua","Fratura completa cominutiva espiral","Fratura completa simples transversa","Fratura completa simples em espiral","Fratura incompleta em espiral"],ans:3,hint:"Helicoidal = espiral. Descontinuidade completa. Sem fragmentos = simples. Logo: completa + simples + espiral."},
+{n:7,text:"Assinale a alternativa que classifica corretamente o tipo de fratura tibial e sua localização:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVCO3nYqQbcVXQ2N_HXKiIpzbZYOiyeWgVt1Hk_2YgM5Ak2_vH9CA9v78t5WN2sdvAwOxn3FBRmZ1cO3MkDNsa2szQSkPBBJq5r-jW-npgViQBEhCqOGZbMDcHSF84Bv4rvXEKC-6Zi2T2t_Fxil2PJqPWLvM0pFQKUZW5Lzla6FGhELzY-XkJPzmwqb4EAdiYOgNZKRYDN_8Uvj=w427",opts:["Fratura incompleta, simples, localizada no terço médio da diáfise da tíbia","Fratura completa, simples, localizada no terço distal da metáfise da tíbia","Fratura completa, cominutiva, localizada no terço mediodistal da diáfise da tíbia","Fratura completa, cominutiva, localizada no terço distal da epífise da tíbia","Fratura incompleta, cominutiva, localizada no terço distal da diáfise da tíbia"],ans:2,hint:"Múltiplos fragmentos = cominutiva. Descontinuidade total = completa. Entre médio e distal da diáfise = terço mediodistal."},
+{n:8,text:"A imagem radiográfica evidencia fratura da ulna associada à luxação da cabeça do rádio. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVCwpSjIU9P2IWYwvRewcXOTzjz6nOulfuNhhsCPfMhSpTmTTEIM751h6m0xUn1VWC0SKaFsMyFUW0oteEg8A5tnvT_NkIaaQTEBIlGCyCpDDkdjf=w333",opts:["Fratura de Galeazzi","Fratura simples de ulna","Fratura cominutiva de rádio","Fratura de Monteggia","Luxação isolada do rádio"],ans:3,hint:"Monteggia = fratura da ulna + luxação da cabeça do rádio. 'M' de Monteggia = Medial (ulna). Galeazzi é o inverso."},
+{n:9,text:"Assinale a alternativa que classifica corretamente o tipo de fratura e sua localização:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVDc_CsiskoZWDm47f3rkBPvVsL6LtnZpEFFLmTlO-5lS4rEU7I7dqFYpR9_AJ6zSqM_ljdFPWrh0dQCd-uFYBQOHhq0RUsbmlI7f35G3CfvKo4omCQfJXO=w253",opts:["Fratura simples, incompleta, oblíqua, localizada no terço médio do 2º metacarpiano","Fratura simples, completa, oblíqua, localizada no terço médio do 2º metacarpiano","Fratura cominutiva, completa, oblíqua, localizada no terço distal do 4º metacarpiano","Fratura simples, completa, oblíqua, localizada no terço médio do 4º metacarpiano","Fratura simples, completa, espiral, localizada no terço proximal do 4º metacarpiano"],ans:3,hint:"4º metacarpiano. Traço oblíquo, completa, simples, posição central = terço médio."},
+{n:10,text:"Cão, macho, 3 anos, atropelamento — claudicação intensa, dor à palpação do fêmur, incapacidade de sustentação. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVA3n8cgtkPl1fXmGS_LVIXphkCC1ifgSkKGjaA9yXq-aMx8TN1nUuIZTFwWMZci-iRa1nZPD8kvDPhPX3-_qarAqbZtHnOp2u3Np9KGjaA9yXq=w418",opts:["Fratura simples, incompleta, oblíqua, localizada no terço médio da diáfise do fêmur","Fratura completa, cominutiva, oblíqua, localizada no terço distal da diáfise do fêmur","Fratura simples, completa, transversa, localizada no terço médio da diáfise do fêmur","Fratura simples, completa, oblíqua, localizada no terço médio da diáfise do fêmur","Fratura simples, completa, espiral, localizada no terço proximal da diáfise do fêmur"],ans:3,hint:"Atropelamento → oblíqua. Incapacidade de sustentação → completa. Sem fragmentos = simples. Terço médio da diáfise."},
+{n:11,text:"Cadela, 2 anos, atropelamento — dor intensa, incapacidade de apoio, aumento de volume e instabilidade no membro pélvico. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVDhkFNgxZWSKIkNOjYObiMqclBI6VKf9z4lH0Ev3ZhAaXMeyZZPPImhFWTc-VfXDuSvhZvXQjJNhPkZYPNVuNUenP6fhGGghDt91w-wwnMYEKx9zHbqEmTGp1mkA-PyLBvvDTsPFxNuF0g1LDUR_pQ7UYwleu34py8nqecC1yBEQQYeWe9PiZFZB4Dk94kJ3Y-iCgjt_rkIoQY=w399",opts:["Fratura simples, incompleta, oblíqua, localizada no terço médio da diáfise da tíbia","Fratura completa, cominutiva, oblíqua, localizada no terço distal da diáfise da tíbia e da fíbula","Fratura simples, completa, em espiral, localizada no terço médio da diáfise da tíbia e da fíbula","Fratura simples, completa, transversa, localizada no terço médio da diáfise da tíbia e da fíbula","Fratura simples, completa, espiral, localizada no terço proximal da diáfise da tíbia e da fíbula"],ans:3,hint:"Instabilidade = completa. Tíbia e fíbula. Traço perpendicular = transverso. Terço médio da diáfise."},
+{n:12,text:"Cão jovem, claudicação aguda após atividade intensa. Pequeno fragmento deslocado em região de inserção tendínea. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVD9hAq6cAsNrKEC5HvYy8kw2gVJOFUCUJ3eQRuHjAMSjMpxW3b6C-cAHxJSMw0lYiHElExmwXRCx5_ltsm13xZ2IAs3NrB3nBWfouwzQgobYnvHBe27eVAtUuU8sFBTMw8W6aTWWvnEuxlIt6yy_FMuxG_Q-VnK3plEoCrFCSx6hlXEnt5t-YEXMh8cMXDPrxBqW9wixjEW5FID=w461",opts:["Fratura transversa","Fratura espiral","Fratura cominutiva","Fratura incompleta","Fratura por avulsão"],ans:4,hint:"Fragmento em região de inserção tendínea = fratura por avulsão. O tendão arranca o fragmento durante esforço intenso."},
+{n:13,text:"Assinale a alternativa que classifica corretamente o tipo de fratura:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVDZv4cZYPbZCKJWZP6LHldbBm4-2o7_Vy-pdmoEiXSUumsABxMoGHeGZwV1TG8K9JwIw0PdpBShI4LY7NRHEbxdjMNSBG7Vafbv11M4rjzKznJiPYMPGBi2zQW4eYdNDa61hgBHsJnhtHTPvWvV_HxuBkWFoJ-tU0QzpcA6jMI7ebM71Fzqh10UV7TiBKNCxWXhjg=w228",opts:["Fratura simples completa, transversa do terço distal do rádio e da ulna","Fratura simples completa oblíqua do terço proximal do rádio e da ulna","Fratura completa, transversa do terço distal da tíbia e da fíbula","Fratura simples completa espiral do terço distal do rádio e da ulna","Fratura incompleta transversa do terço distal do rádio e da ulna"],ans:0,hint:"Rádio e ulna, terço distal, traço transverso, completa, simples — todos os critérios da alternativa A."},
+{n:14,text:"Fratura em animal jovem com separação ao nível da placa de crescimento, sem envolvimento de metáfise ou epífise. Classifique corretamente:",img:"https://lh7-rt.googleusercontent.com/formsz/AN7BsVBuPsk_9tNjGv7szgrC65RMhRAw9pcWAUtvkQljtebVT-3LO-XOE0AwoFcU0DYuQbgEiwBu2zUVAeHrPACsDiYVO1iv4U7aO4WZs8PD7c4XOiB_F6vBPg5V8IWz5t-aBE7gMBvQ3XHXY9EWjJ8B0M4LQi0TiRBWrFwVi8k1C2caK5tcMMdUt17ysAqP3QbG4clFca311c=w431",opts:["Fratura Salter-Harris tipo II","Fratura Salter-Harris tipo III","Fratura Salter-Harris tipo I","Fratura Salter-Harris tipo IV","Fratura Salter-Harris tipo V"],ans:2,hint:"Tipo I: EXCLUSIVAMENTE pela fise. Melhor prognóstico. I=só fise; II=fise+metáfise; III=fise+epífise; IV=atravessa tudo; V=compressão."}
+];
+
+let resp=new Array(Q.length).fill(null),done=false;
+
+function build(){
+  const w=document.getElementById('qs');
+  Q.forEach((q,i)=>{
+    const d=document.createElement('div');
+    d.className='qc';d.id='qcard-'+i;
+    d.innerHTML=`<div class="qn"><div class="qnd">${q.n}</div>QUESTÃO ${q.n} · 1 PONTO</div>
+<div class="qt">${q.text}</div>
+<div class="qiw"><img class="qi" src="${q.img}" alt="Radiografia Q${q.n}" onerror="this.closest('.qiw').innerHTML='<div style=padding:10px;font-size:12px;color:#999;font-style:italic>Imagem radiográfica — questão ${q.n}</div>'"><div class="qic">Imagem radiográfica — questão ${q.n}</div></div>
+<div class="opts">${q.opts.map((o,j)=>`<div class="opt" id="o-${i}-${j}" onclick="pick(${i},${j})"><div class="or"><div class="od"></div></div><div class="ol">${String.fromCharCode(65+j)}</div><div class="ot">${o}</div></div>`).join('')}</div>
+<div class="fb" id="fb-${i}"></div>`;
+    w.appendChild(d);
+  });
+}
+
+function pick(qi,oi){
+  if(done)return;
+  if(resp[qi]!==null)document.getElementById(`o-${qi}-${resp[qi]}`).classList.remove('sel');
+  resp[qi]=oi;
+  document.getElementById(`o-${qi}-${oi}`).classList.add('sel');
+  document.getElementById('qcard-'+qi).classList.add('answered');
+  const n=resp.filter(x=>x!==null).length;
+  document.getElementById('pf').style.width=(n/Q.length*100)+'%';
+  document.getElementById('pn').textContent=n;
+}
+
+async function send(){
+  const nome=document.getElementById('nm').value.trim();
+  const email=document.getElementById('em').value.trim();
+  const n=resp.filter(x=>x!==null).length;
+  if(!nome){alert('Por favor, informe seu nome.');return;}
+  if(!email){alert('Por favor, informe seu e-mail.');return;}
+  if(n<Q.length){alert('Responda todas as questões. Faltam '+(Q.length-n)+'.');return;}
+  done=true;
+  document.getElementById('ov').classList.add('show');
+
+  let correct=0;
+  const det={};
+  Q.forEach((q,i)=>{
+    const ok=resp[i]===q.ans;
+    if(ok)correct++;
+    det['Q'+q.n+'_resposta']=String.fromCharCode(65+resp[i])+') '+q.opts[resp[i]];
+    det['Q'+q.n+'_gabarito']=String.fromCharCode(65+q.ans)+') '+q.opts[q.ans];
+    det['Q'+q.n+'_resultado']=ok?'CORRETA':'ERRADA';
+  });
+  const pct=Math.round(correct/Q.length*100);
+
+  const payload={
+    nome,email,
+    pontuacao:correct+' / '+Q.length,
+    aproveitamento:pct+'%',
+    data_hora:new Date().toLocaleString('pt-BR'),
+    ...det,
+    _subject:'Quiz Fraturas IVI — '+nome+' ('+pct+'%)',
+    _captcha:'false',
+    _template:'table'
+  };
+
+  try{
+    await fetch('https://formsubmit.co/ajax/'+DEST,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify(payload)
+    });
+  }catch(e){}
+
+  document.getElementById('ov').classList.remove('show');
+
+  Q.forEach((q,i)=>{
+    const ch=resp[i],ok=ch===q.ans;
+    q.opts.forEach((_,j)=>{
+      const el=document.getElementById(`o-${i}-${j}`);
+      el.classList.remove('sel');
+      if(j===q.ans)el.classList.add('ok');
+      else if(j===ch&&!ok)el.classList.add('ng');
+      else el.classList.add('dis');
+    });
+    const card=document.getElementById('qcard-'+i);
+    card.classList.remove('answered');
+    if(!ok)card.classList.add('has-err');
+    const fb=document.getElementById('fb-'+i);
+    fb.classList.add('show');
+    fb.className='fb show '+(ok?'ok':'ng');
+    fb.innerHTML='<strong>'+(ok?'✓ Correto!':'✗ Incorreto.')+'</strong> '+(ok?'':' <strong>Dica:</strong> ')+q.hint;
+  });
+
+  document.getElementById('sn').textContent=correct;
+  document.getElementById('sc').textContent=correct;
+  document.getElementById('sw').textContent=Q.length-correct;
+  document.getElementById('sp').textContent=pct+'%';
+  let t='',s='';
+  if(pct>=90){t='Excelente! 🎉';s='Desempenho excepcional. Domínio sólido do conteúdo!';}
+  else if(pct>=70){t='Muito bom!';s='Bom domínio do conteúdo de fraturas. Continue!';}
+  else if(pct>=50){t='Bom esforço!';s='Revise as questões em vermelho e as dicas.';}
+  else{t='Continue estudando!';s='Releia o material e refaça com atenção às dicas.';}
+  document.getElementById('rt').textContent=t;
+  document.getElementById('rs').textContent=nome+' · '+s;
+  document.getElementById('rc').classList.add('show');
+  document.getElementById('sg').classList.add('show');
+  document.getElementById('bs').style.display='none';
+  document.getElementById('rc').scrollIntoView({behavior:'smooth'});
+}
+
+build();
+</script>
+</body>
+</html>
