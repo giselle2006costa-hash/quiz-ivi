@@ -125,17 +125,7 @@ code{background:var(--gyl);border:1px solid var(--gym);padding:1px 6px;border-ra
 
 <main class="mn">
 
-  <!-- GUIA SHEETS (aparece após envio) -->
-  <div class="cd top-sheets sg" id="sg">
-    <h3>📊 Como receber respostas no Google Sheets</h3>
-    <ol class="sl">
-      <li><div class="snum">1</div><div>No arquivo HTML, localize a linha <code>const DEST = 'SEU-EMAIL-AQUI'</code> e substitua pelo seu e-mail real.</div></li>
-      <li><div class="snum">2</div><div>Hospede o arquivo em qualquer servidor (ex: <a href="https://pages.github.com" target="_blank">GitHub Pages</a> — gratuito) ou use o <strong>Live Server</strong> do VS Code para testes.</div></li>
-      <li><div class="snum">3</div><div>Na primeira resposta, o FormSubmit envia um e-mail de ativação. Clique em <strong>"Confirm your submission"</strong>.</div></li>
-      <li><div class="snum">4</div><div>Acesse <a href="https://formsubmit.co" target="_blank">formsubmit.co</a> → faça login → vá em <strong>Integrations → Google Sheets</strong> e cole o link da sua planilha.</div></li>
-      <li><div class="snum">5</div><div>Pronto! Cada envio gera uma nova linha na planilha com: data, nome, e-mail, pontuação e todas as respostas. ✅</div></li>
-    </ol>
-  </div>
+
 
   <!-- IDENTIFICAÇÃO -->
   <div class="cd top-green">
@@ -288,7 +278,6 @@ async function send(){
   document.getElementById('rt').textContent=t;
   document.getElementById('rs').textContent=nome+' · '+s;
   document.getElementById('rc').classList.add('show');
-  document.getElementById('sg').classList.add('show');
   document.getElementById('bs').style.display='none';
   document.getElementById('rc').scrollIntoView({behavior:'smooth'});
 }
