@@ -1,0 +1,12 @@
+{
+  "name": "agente-pessoal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node src/server.js",
+    "auth:outlook": "node scripts/auth-outlook.js",
+    "test": "node --test"
+  }
+}

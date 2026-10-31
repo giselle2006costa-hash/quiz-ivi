@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minha Agenda</title>
+<style>
+  :root { --bg:#faf8f5; --fg:#222; --muted:#777; --card:#fff; --line:#e5e0d8; --acc:#3b6e5c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181a; --fg:#eee; --muted:#9a9a9a; --card:#202326; --line:#33373b; --acc:#6fb59c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 16px; }
+  h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:24px 0 8px; }
+  form, .item, pre { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  form { display:grid; gap:8px; grid-template-columns:1fr 1fr; }
+  form .full { grid-column:1/-1; }
+  input, select, button { font:inherit; padding:9px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); width:100%; }
+  button { background:var(--acc); color:#fff; border:0; cursor:pointer; font-weight:600; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); width:auto; padding:4px 10px; font-weight:400; }
+  .item { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+  .item.done .t { text-decoration:line-through; color:var(--muted); }
+  .item .t { flex:1; } .item small { color:var(--muted); display:block; }
+  .item input[type=checkbox] { width:22px; height:22px; flex:none; }
+  pre { white-space:pre-wrap; font:inherit; margin:0; }
+  #status { font-size:.8rem; color:var(--muted); }
+  #login { display:none; } 
+</style>
+</head>
+<body>
+<main>
+  <h1>Minha Agenda</h1>
+  <div id="login"><form onsubmit="return saveToken(event)"><input class="full" id="tok" type="password" placeholder="Senha (APP_TOKEN)"><button class="full">Entrar</button></form></div>
+  <div id="app" hidden>
+    <form id="f" onsubmit="return add(event)">
+      <input class="full" name="title" placeholder="O que precisa fazer?" required>
+      <input name="start" type="datetime-local" title="Deixe vazio para tarefa sem horario">
+      <input name="due" type="date" title="Prazo (tarefa sem horario)">
+      <select name="dur"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 h</option><option value="120">2 h</option></select>
+      <select name="prio"><option value="1">Prioridade alta</option><option value="2" selected>Media</option><option value="3">Baixa</option></select>
+      <select name="rem" class="full"><option value="5">Avisar 5 min antes</option><option value="15" selected>Avisar 15 min antes</option><option value="60">Avisar 1 h antes</option></select>
+      <button class="full">Adicionar</button>
+    </form>
+    <h2>Plano de hoje</h2><pre id="plan">...</pre>
+    <h2>Tudo</h2><div id="list"></div>
+    <p id="status"></p>
+    <button class="ghost" onclick="testNotify()">Enviar notificacao de teste</button>
+    <button class="ghost" onclick="logout()">Sair</button>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem('tok') || '';
+async function api(method, path, body) {
+  const r = await fetch('/api' + path, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
+  if (r.status === 401) { logout(); throw new Error('401'); }
+  return r.json();
+}
+function saveToken(e) { e.preventDefault(); token = $('tok').value; localStorage.setItem('tok', token); load(); }
+function logout() { localStorage.removeItem('tok'); token = ''; $('app').hidden = true; $('login').style.display = 'block'; }
+const fmt = (i) => i.start_at ? new Date(i.start_at).toLocaleString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+  : (i.due_date ? 'prazo ' + i.due_date.split('-').reverse().join('/') : 'sem data');
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+async function load() {
+  if (!token) return logout();
+  $('login').style.display = 'none'; $('app').hidden = false;
+  const [items, plan, st] = await Promise.all([api('GET', '/items'), api('GET', '/plan'), api('GET', '/status')]);
+  $('plan').textContent = plan.text;
+  $('status').textContent = `Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
+  $('list').innerHTML = items.map((i) => `<div class="item ${i.done ? 'done' : ''}">
+    <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
+    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}</small></div>
+    <button class="ghost" onclick="del(${i.id})">apagar</button></div>`).join('') || '<p>Nada por aqui ainda.</p>';
+}
+async function add(e) {
+  e.preventDefault();
+  const f = new FormData($('f'));
+  const body = { title: f.get('title'), duration_min: +f.get('dur'), priority: +f.get('prio'), remind_min: +f.get('rem') };
+  if (f.get('start')) body.start_at = new Date(f.get('start')).toISOString();
+  else if (f.get('due')) body.due_date = f.get('due');
+  await api('POST', '/items', body); $('f').reset(); load();
+}
+const toggle = async (id, done) => { await api('PATCH', '/items/' + id, { done }); load(); };
+const del = async (id) => { if (confirm('Apagar?')) { await api('DELETE', '/items/' + id); load(); } };
+const testNotify = async () => { await api('POST', '/test-notify'); alert('Enviado.'); };
+load();
+setInterval(() => token && load(), 60000);
+</script>
+</body>
+</html>
