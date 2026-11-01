@@ -10,6 +10,7 @@ import { buildPlan, dayKey } from './planner.js';
 import { startScheduler } from './scheduler.js';
 import { notify } from './notify.js';
 import { createLimiter } from './ratelimit.js';
+import { planEdit, validatePatch } from './patch.js';
 
 const limiter = createLimiter();
 const clientIp = (req) => req.headers['fly-client-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
@@ -38,7 +39,7 @@ const clean = (b) => {
   const out = {};
   if (typeof b.title === 'string') out.title = b.title.trim().slice(0, 200);
   if (typeof b.notes === 'string') out.notes = b.notes.slice(0, 2000);
-  if ('start_at' in b) out.start_at = b.start_at ? new Date(b.start_at).toISOString() : null;
+  if ('start_at' in b) out.start_at = b.start_at ? (Number.isNaN(Date.parse(b.start_at)) ? 'invalid' : new Date(b.start_at).toISOString()) : null;
   if ('due_date' in b) out.due_date = /^\d{4}-\d{2}-\d{2}$/.test(b.due_date || '') ? b.due_date : null;
   for (const k of ['duration_min', 'remind_min', 'priority']) if (Number.isInteger(b[k]) && b[k] >= 0) out[k] = b[k];
   if (['event', 'task', 'note'].includes(b.kind)) out.kind = b.kind;
@@ -149,6 +150,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/items' && req.method === 'POST') {
       const b = clean(await readBody(req));
       if (!b.title) return json(res, 400, { error: 'title obrigatorio' });
+      const problem = validatePatch(b);
+      if (problem) return json(res, 400, { error: problem });
       return json(res, 201, await sync(s.create(b)));
     }
     const m = url.pathname.match(/^\/api\/items\/(\d+)$/);
@@ -157,9 +160,17 @@ const server = http.createServer(async (req, res) => {
       const cur = s.get(id);
       if (!cur) return json(res, 404, { error: 'not found' });
       if (req.method === 'PATCH') {
-        const upd = s.update(id, clean(await readBody(req)));
-        // concluido sai do Outlook? nao: so mudancas de horario/titulo sincronizam
-        return json(res, 200, await sync(upd));
+        let patch;
+        try { patch = clean(await readBody(req)); } catch (_) { return json(res, 400, { error: 'dados invalidos' }); }
+        const problem = validatePatch(patch);
+        if (problem) return json(res, 400, { error: problem });
+        const plan = planEdit(cur, patch);
+        if (plan.removeFromOutlook) {
+          try { await deleteFromOutlook(cur); plan.patch.outlook_id = null; }
+          catch (e) { console.error('[outlook]', e.message); }
+        }
+        const upd = s.update(id, plan.patch);
+        return json(res, 200, plan.syncOutlook ? await sync(upd) : upd);
       }
       if (req.method === 'DELETE') {
         try { await deleteFromOutlook(cur); } catch (e) { console.error('[outlook]', e.message); }

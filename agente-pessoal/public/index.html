@@ -30,6 +30,13 @@
   details { margin-top:12px; } summary { cursor:pointer; color:var(--muted); font-size:.9rem; margin-bottom:8px; }
   #qreply, #olbox { margin:8px 0; }
   a { color:var(--acc); }
+  .item .acts { display:flex; flex-direction:column; gap:4px; }
+  .item.edit { display:block; }
+  .edit .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .edit .grid .full { grid-column:1/-1; }
+  .edit label { font-size:.75rem; color:var(--muted); display:block; margin-bottom:2px; }
+  .edit .btns { display:flex; gap:8px; margin-top:10px; }
+  .edit textarea { width:100%; font:inherit; padding:9px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); min-height:60px; }
 </style>
 </head>
 <body>
@@ -110,16 +117,64 @@ async function load() {
   $('login').style.display = 'none'; $('app').hidden = false;
   $('plan').textContent = plan.text;
   $('status').textContent = `v${st.version} · Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
-  const row = (i) => `<div class="item ${i.done ? 'done' : ''}">
-    <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
-    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
-    <button class="ghost" onclick="del(${i.id})">apagar</button></div>`;
-  $('list').innerHTML = items.filter((i) => i.kind !== 'note').map(row).join('') || '<p>Nada por aqui ainda.</p>';
-  $('notes').innerHTML = items.filter((i) => i.kind === 'note').map(row).join('') || '<p>Nenhuma anotação.</p>';
+  cache = items;
+  if (editing === null) render();
   $('olbtn').hidden = !(st.outlookConfigured && !st.outlook);
   if (!st.outlookConfigured) $('status').textContent += ' (para ligar o Outlook falta MS_CLIENT_ID no servidor)';
   if (st.outlookPending && $('olbox').hidden) showCode(st.outlookPending);
   if (st.outlook) $('olbox').hidden = true;
+}
+let cache = [], editing = null;
+const attr = (s) => esc(s ?? '').replace(/"/g, '&quot;');
+const localInput = (iso) => { // ISO UTC -> valor do datetime-local no fuso do aparelho
+  if (!iso) return '';
+  const d = new Date(iso), p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const opts = (list, cur) => list.map(([v, l]) => `<option value="${v}" ${+v === +cur ? 'selected' : ''}>${l}</option>`).join('');
+function row(i) {
+  if (i.id === editing) return editRow(i);
+  return `<div class="item ${i.done ? 'done' : ''}">
+    <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
+    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
+    <div class="acts"><button class="ghost" onclick="edit(${i.id})">editar</button><button class="ghost" onclick="del(${i.id})">apagar</button></div></div>`;
+}
+function editRow(i) {
+  const note = i.kind === 'note';
+  return `<form class="item edit" onsubmit="return saveEdit(event, ${i.id})">
+    <label>${note ? 'Anotação' : 'Título'}</label><input name="title" value="${attr(i.title)}" required>
+    <div class="grid">${note ? '' : `
+      <div class="full"><label>Data e hora (deixe vazio para virar tarefa)</label><input name="start" type="datetime-local" value="${localInput(i.start_at)}"></div>
+      <div><label>Prazo (tarefa sem hora)</label><input name="due" type="date" value="${attr(i.due_date)}"></div>
+      <div><label>Duração</label><select name="dur">${opts([[15, '15 min'], [30, '30 min'], [45, '45 min'], [60, '1 h'], [90, '1h30'], [120, '2 h']], i.duration_min)}</select></div>
+      <div><label>Prioridade</label><select name="prio">${opts([[1, 'Alta'], [2, 'Média'], [3, 'Baixa']], i.priority)}</select></div>
+      <div><label>Avisar antes</label><select name="rem">${opts([[0, 'Na hora'], [5, '5 min'], [15, '15 min'], [30, '30 min'], [60, '1 h']], i.remind_min)}</select></div>`}
+      <div class="full"><label>Detalhes</label><textarea name="notes">${esc(i.notes)}</textarea></div>
+    </div>
+    <p id="eerr" style="color:#b3402d;margin:8px 0 0"></p>
+    <div class="btns"><button>Salvar</button><button type="button" class="ghost" onclick="cancelEdit()">Cancelar</button></div></form>`;
+}
+function render() {
+  $('list').innerHTML = cache.filter((i) => i.kind !== 'note').map(row).join('') || '<p>Nada por aqui ainda.</p>';
+  $('notes').innerHTML = cache.filter((i) => i.kind === 'note').map(row).join('') || '<p>Nenhuma anotação.</p>';
+}
+const edit = (id) => { editing = id; render(); };
+const cancelEdit = () => { editing = null; render(); load().catch(() => {}); };
+async function saveEdit(e, id) {
+  e.preventDefault();
+  const f = new FormData(e.target), cur = cache.find((x) => x.id === id);
+  const body = { title: f.get('title').trim(), notes: f.get('notes') };
+  if (cur.kind !== 'note') {
+    Object.assign(body, { start_at: f.get('start') ? new Date(f.get('start')).toISOString() : null,
+      due_date: f.get('due') || null, duration_min: +f.get('dur'), priority: +f.get('prio'), remind_min: +f.get('rem') });
+    if (body.start_at) body.due_date = null; // compromisso nao usa prazo
+  }
+  try {
+    const j = await api('PATCH', '/items/' + id, body);
+    if (j.error) { $('eerr').textContent = j.error; return false; }
+    editing = null; await load();
+  } catch (_) { $('eerr').textContent = 'Não consegui salvar. Tente de novo.'; }
+  return false;
 }
 function showCode(j) {
   $('olbox').hidden = false;
