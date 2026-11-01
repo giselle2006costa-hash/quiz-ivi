@@ -8,6 +8,7 @@
   :root { --bg:#faf8f5; --fg:#222; --muted:#777; --card:#fff; --line:#e5e0d8; --acc:#3b6e5c; }
   @media (prefers-color-scheme: dark) { :root { --bg:#16181a; --fg:#eee; --muted:#9a9a9a; --card:#202326; --line:#33373b; --acc:#6fb59c; } }
   * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; font:16px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
   main { max-width:640px; margin:0 auto; padding:16px; }
   h1 { font-size:1.3rem; margin:8px 0 16px; }
@@ -64,6 +65,11 @@
     </form>
     <pre id="qreply" hidden></pre>
     <div id="chips" class="chips"></div>
+    <form id="newcat" class="quick" hidden onsubmit="return addCat(event, 'n')" style="margin-top:8px">
+      <input id="nname" placeholder="Nome da nova categoria" maxlength="40" autocomplete="off">
+      <select id="ncolor"><option value="#3b6e5c">Verde</option><option value="#2f6fa8">Azul</option><option value="#7a4fa0">Roxo</option><option value="#c4702a">Laranja</option><option value="#b8467a">Rosa</option><option value="#6b7280">Cinza</option></select>
+      <button>Criar</button>
+    </form>
     <details><summary>Cadastro detalhado</summary>
     <form id="f" onsubmit="return add(event)">
       <input class="full" name="title" placeholder="O que precisa fazer?" required>
@@ -183,19 +189,25 @@ function render() {
 }
 function drawCats() {
   const chip = (id, label, color) => `<button type="button" class="chip ${filter === id ? 'on' : ''}" onclick="setFilter(${id})">${color ? `<i style="background:${attr(color)}"></i>` : ''}${esc(label)}</button>`;
-  $('chips').innerHTML = cats.length ? chip(null, 'Todas') + cats.map((c) => chip(c.id, c.name, c.color)).join('') : '';
+  $('chips').innerHTML = (cats.length ? chip(null, 'Todas') + cats.map((c) => chip(c.id, c.name, c.color)).join('') : '')
+    + '<button type="button" class="chip" onclick="toggleNewCat()">+ Nova</button>';
   $('catsel').innerHTML = catOptions(filter);
   $('catlist').innerHTML = cats.map((c) => `<div class="catrow"><i class="cdot" style="background:${attr(c.color)}"></i><span>${esc(c.name)}</span>
     <button class="ghost" onclick="renameCat(${c.id})">renomear</button><button class="ghost" onclick="delCat(${c.id})">apagar</button></div>`).join('') || '<p>Nenhuma categoria.</p>';
 }
 function setFilter(id) { filter = id; editing = null; drawCats(); render(); }
-async function addCat(e) {
+function toggleNewCat() {
+  $('newcat').hidden = !$('newcat').hidden;
+  if (!$('newcat').hidden) $('nname').focus();
+}
+async function addCat(e, prefix = 'cat') { // 'n' = formulario do topo; 'cat' = secao do fim da pagina
   e.preventDefault();
-  const name = $('catname').value.trim();
+  const nameEl = $(prefix === 'n' ? 'nname' : 'catname'), color = $(prefix === 'n' ? 'ncolor' : 'catcolor').value;
+  const name = nameEl.value.trim();
   if (!name) return false;
-  const j = await api('POST', '/categories', { name, color: $('catcolor').value });
+  const j = await api('POST', '/categories', { name, color });
   if (j.error) { alert(j.error[0].toUpperCase() + j.error.slice(1) + '.'); return false; }
-  $('catname').value = ''; load();
+  nameEl.value = ''; $('newcat').hidden = true; load();
   return false;
 }
 async function renameCat(id) {
