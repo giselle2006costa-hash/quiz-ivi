@@ -35,7 +35,12 @@
 <body>
 <main>
   <h1>Minha Agenda</h1>
-  <div id="login"><form onsubmit="return saveToken(event)"><input class="full" id="tok" type="password" placeholder="Senha (APP_TOKEN)"><button class="full">Entrar</button></form></div>
+  <div id="login"><form onsubmit="return login(event)">
+    <input type="text" name="username" value="agenda" autocomplete="username" style="display:none">
+    <input class="full" id="tok" type="password" name="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" placeholder="Senha">
+    <button class="full" id="lbtn">Entrar</button>
+    <p class="full" id="lerr" style="margin:0;color:#b3402d;min-height:1.2em"></p>
+  </form></div>
   <div id="app" hidden>
     <form id="q" class="quick" onsubmit="return quick(event)">
       <input id="qtext" placeholder="Fale ou escreva: dentista amanhã às 14h" autocomplete="off">
@@ -65,21 +70,43 @@
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-let token = localStorage.getItem('tok') || '';
+// A sessao fica num cookie do servidor (dura ~1 ano); nada de senha guardada no navegador.
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function api(method, path, body) {
-  const r = await fetch('/api' + path, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
-  if (r.status === 401) { logout(); throw new Error('401'); }
-  return r.json();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch('/api' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
+      if (r.status === 401 && path !== '/login') { showLogin(); throw new Error('401'); }
+      return await r.json();
+    } catch (e) {
+      // so repete leituras: repetir um cadastro poderia duplicar o item
+      if (e.message === '401' || method !== 'GET' || attempt >= 2) throw e;
+      await wait(700);
+    }
+  }
 }
-function saveToken(e) { e.preventDefault(); token = $('tok').value; localStorage.setItem('tok', token); load(); }
-function logout() { localStorage.removeItem('tok'); token = ''; $('app').hidden = true; $('login').style.display = 'block'; }
+function showLogin(msg = '') { $('app').hidden = true; $('login').style.display = 'block'; $('lerr').textContent = msg; }
+async function login(e) {
+  e.preventDefault();
+  const password = $('tok').value;
+  if (!password) return false;
+  $('lbtn').disabled = true; $('lbtn').textContent = 'Entrando...'; $('lerr').textContent = '';
+  try {
+    const j = await api('POST', '/login', { password });
+    if (j.error) showLogin(j.error === 'senha incorreta' ? 'Senha incorreta.' : 'Muitas tentativas. Tente em 15 minutos.');
+    else { $('tok').value = ''; await load(); }
+  } catch (_) { showLogin('Não consegui falar com o servidor. Tente de novo.'); }
+  $('lbtn').disabled = false; $('lbtn').textContent = 'Entrar';
+  return false;
+}
+async function logout() { try { await api('POST', '/logout'); } catch (_) {} showLogin(); }
 const fmt = (i) => i.kind === 'note' ? 'anotação' : i.start_at ? new Date(i.start_at).toLocaleString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
   : (i.due_date ? 'prazo ' + i.due_date.split('-').reverse().join('/') : 'sem data');
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 async function load() {
-  if (!token) return logout();
-  $('login').style.display = 'none'; $('app').hidden = false;
   const [items, plan, st] = await Promise.all([api('GET', '/items'), api('GET', '/plan'), api('GET', '/status')]);
+  if (!Array.isArray(items)) throw new Error('resposta inesperada');
+  $('login').style.display = 'none'; $('app').hidden = false;
   $('plan').textContent = plan.text;
   $('status').textContent = `Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
   const row = (i) => `<div class="item ${i.done ? 'done' : ''}">
@@ -131,8 +158,8 @@ async function add(e) {
 const toggle = async (id, done) => { await api('PATCH', '/items/' + id, { done }); load(); };
 const del = async (id) => { if (confirm('Apagar?')) { await api('DELETE', '/items/' + id); load(); } };
 const testNotify = async () => { await api('POST', '/test-notify'); alert('Enviado.'); };
-load();
-setInterval(() => token && load(), 60000);
+load().catch((e) => { if (e.message !== '401') showLogin('Não consegui falar com o servidor. Recarregue a página.'); });
+setInterval(() => { if (!$('app').hidden) load().catch(() => {}); }, 60000);
 </script>
 </body>
 </html>

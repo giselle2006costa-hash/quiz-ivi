@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
+import { safeEqual, sessionValue, readCookie, COOKIE, sessionCookie, clearCookie } from './auth.js';
 import { config, ROOT } from './config.js';
 import { openDb, store } from './db.js';
 import { syncToOutlook, deleteFromOutlook, outlookEnabled, connectOutlook, outlookPending, outlookLastError } from './outlook.js';
@@ -25,11 +25,14 @@ const readBody = (req) => new Promise((ok, fail) => {
   req.on('data', (c) => { b += c; if (b.length > 1e6) req.destroy(); });
   req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { fail(e); } });
 });
+// Aceita o cookie de sessao (app web) ou "Authorization: Bearer" (atalho da Siri, scripts).
 const authorized = (req) => {
-  const got = Buffer.from((req.headers.authorization || '').replace(/^Bearer /, ''));
-  const want = Buffer.from(config.appToken);
-  return want.length > 0 && got.length === want.length && timingSafeEqual(got, want);
+  if (!config.appToken) return false;
+  const bearer = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (bearer && safeEqual(bearer, config.appToken)) return true;
+  return safeEqual(readCookie(req.headers.cookie, COOKIE), sessionValue(config.appToken));
 };
+const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https';
 
 const clean = (b) => {
   const out = {};
@@ -93,6 +96,20 @@ const server = http.createServer(async (req, res) => {
     if (!url.pathname.startsWith('/api/')) return json(res, 404, { error: 'not found' });
     const ip = clientIp(req);
     if (limiter.blocked(ip)) return json(res, 429, { error: 'muitas tentativas, tente mais tarde' });
+    if (url.pathname === '/api/login' && req.method === 'POST') {
+      const { password } = await readBody(req);
+      if (typeof password === 'string' && safeEqual(password, config.appToken)) {
+        limiter.reset(ip);
+        res.setHeader('Set-Cookie', sessionCookie(config.appToken, isHttps(req)));
+        return json(res, 200, { ok: true });
+      }
+      limiter.fail(ip);
+      return json(res, 401, { error: 'senha incorreta' });
+    }
+    if (url.pathname === '/api/logout' && req.method === 'POST') {
+      res.setHeader('Set-Cookie', clearCookie(isHttps(req)));
+      return json(res, 200, { ok: true });
+    }
     if (!authorized(req)) {
       // sem header = abertura da pagina sem login; so conta como erro quando ha senha errada
       if (req.headers.authorization) limiter.fail(ip);
