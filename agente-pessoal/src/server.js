@@ -88,7 +88,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
-    if (url.pathname === '/healthz') return json(res, 200, { ok: true });
+    if (url.pathname === '/healthz') return json(res, 200, { ok: true, version: config.version });
     if (url.pathname === '/' || url.pathname === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(readFileSync(path.join(ROOT, 'public', 'index.html')));
@@ -100,10 +100,12 @@ const server = http.createServer(async (req, res) => {
       const { password } = await readBody(req);
       if (typeof password === 'string' && safeEqual(password, config.appToken)) {
         limiter.reset(ip);
+        console.log(`[login] ok ip=${ip}`);
         res.setHeader('Set-Cookie', sessionCookie(config.appToken, isHttps(req)));
         return json(res, 200, { ok: true });
       }
       limiter.fail(ip);
+      console.log(`[login] senha incorreta ip=${ip}`);
       return json(res, 401, { error: 'senha incorreta' });
     }
     if (url.pathname === '/api/logout' && req.method === 'POST') {
@@ -113,13 +115,14 @@ const server = http.createServer(async (req, res) => {
     if (!authorized(req)) {
       // sem header = abertura da pagina sem login; so conta como erro quando ha senha errada
       if (req.headers.authorization) limiter.fail(ip);
+      console.log(`[auth] 401 ${req.method} ${url.pathname} cookie=${req.headers.cookie ? 'sim' : 'nao'} ip=${ip}`);
       return json(res, 401, { error: 'unauthorized' });
     }
     limiter.reset(ip);
 
     if (url.pathname === '/api/status' && req.method === 'GET')
       return json(res, 200, {
-        outlook: outlookEnabled(), outlookConfigured: !!config.msClientId, outlookPending: outlookPending(),
+        version: config.version, outlook: outlookEnabled(), outlookConfigured: !!config.msClientId, outlookPending: outlookPending(),
         outlookError: outlookLastError(), push: !!config.ntfy.topic, whatsapp: !!config.whatsapp.token,
         ai: !!process.env.ANTHROPIC_API_KEY,
       });

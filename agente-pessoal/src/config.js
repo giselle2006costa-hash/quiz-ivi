@@ -14,7 +14,9 @@ if (existsSync(envFile)) {
 }
 
 const env = process.env;
+const version = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 export const config = {
+  version,
   port: Number(env.PORT || 3000),
   tz: env.TZ || 'America/Sao_Paulo',
   appToken: env.APP_TOKEN || '',

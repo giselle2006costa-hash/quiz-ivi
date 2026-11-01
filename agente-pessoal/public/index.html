@@ -40,6 +40,7 @@
     <input class="full" id="tok" type="password" name="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" placeholder="Senha">
     <button class="full" id="lbtn">Entrar</button>
     <p class="full" id="lerr" style="margin:0;color:#b3402d;min-height:1.2em"></p>
+    <small id="ver" style="color:var(--muted)"></small>
   </form></div>
   <div id="app" hidden>
     <form id="q" class="quick" onsubmit="return quick(event)">
@@ -108,7 +109,7 @@ async function load() {
   if (!Array.isArray(items)) throw new Error('resposta inesperada');
   $('login').style.display = 'none'; $('app').hidden = false;
   $('plan').textContent = plan.text;
-  $('status').textContent = `Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
+  $('status').textContent = `v${st.version} · Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
   const row = (i) => `<div class="item ${i.done ? 'done' : ''}">
     <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
     <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
@@ -158,6 +159,7 @@ async function add(e) {
 const toggle = async (id, done) => { await api('PATCH', '/items/' + id, { done }); load(); };
 const del = async (id) => { if (confirm('Apagar?')) { await api('DELETE', '/items/' + id); load(); } };
 const testNotify = async () => { await api('POST', '/test-notify'); alert('Enviado.'); };
+fetch('/healthz').then((r) => r.json()).then((j) => { $('ver').textContent = 'versão ' + j.version; }).catch(() => {});
 load().catch((e) => { if (e.message !== '401') showLogin('Não consegui falar com o servidor. Recarregue a página.'); });
 setInterval(() => { if (!$('app').hidden) load().catch(() => {}); }, 60000);
 </script>
