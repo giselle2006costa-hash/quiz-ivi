@@ -8,7 +8,10 @@ import { syncToOutlook, deleteFromOutlook, outlookEnabled } from './outlook.js';
 import { buildPlan } from './planner.js';
 import { startScheduler } from './scheduler.js';
 import { notify } from './notify.js';
+import { createLimiter } from './ratelimit.js';
 
+const limiter = createLimiter();
+const clientIp = (req) => req.headers['fly-client-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
 const db = openDb();
 const s = store(db);
 
@@ -52,12 +55,22 @@ async function sync(item) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+    if (url.pathname === '/healthz') return json(res, 200, { ok: true });
     if (url.pathname === '/' || url.pathname === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(readFileSync(path.join(ROOT, 'public', 'index.html')));
     }
     if (!url.pathname.startsWith('/api/')) return json(res, 404, { error: 'not found' });
-    if (!authorized(req)) return json(res, 401, { error: 'unauthorized' });
+    const ip = clientIp(req);
+    if (limiter.blocked(ip)) return json(res, 429, { error: 'muitas tentativas, tente mais tarde' });
+    if (!authorized(req)) {
+      // sem header = abertura da pagina sem login; so conta como erro quando ha senha errada
+      if (req.headers.authorization) limiter.fail(ip);
+      return json(res, 401, { error: 'unauthorized' });
+    }
+    limiter.reset(ip);
 
     if (url.pathname === '/api/status' && req.method === 'GET')
       return json(res, 200, { outlook: outlookEnabled(), push: !!config.ntfy.topic, whatsapp: !!config.whatsapp.token });
@@ -96,6 +109,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (!config.appToken) { console.error('Defina APP_TOKEN no .env'); process.exit(1); }
+if (process.env.NODE_ENV === 'production' && config.appToken.length < 12) {
+  console.error('APP_TOKEN precisa ter pelo menos 12 caracteres em producao'); process.exit(1);
+}
 server.listen(config.port, () => {
   console.log(`Agenda em http://localhost:${config.port}  (outlook: ${outlookEnabled()}, push: ${!!config.ntfy.topic})`);
   startScheduler(s);

@@ -44,16 +44,34 @@ Use a API oficial da Meta (WhatsApp Cloud API): https://developers.facebook.com/
   automaticos crie um template com uma variavel `{{1}}` no corpo, aprove-o e coloque o nome em `WHATSAPP_TEMPLATE`.
 - Use um token permanente (usuario do sistema); o token temporario expira em 24h.
 
-## 5. Deixar rodando 24h
-Precisa de um lugar sempre ligado e com volume persistente para `data/` (SQLite + token do Outlook).
-Exemplos: Fly.io, Railway, Render (com disco), ou uma VPS barata.
+## 5. Deixar rodando 24h (Fly.io, no Mac)
+O app precisa de um servidor sempre ligado e de um disco persistente para `data/` (banco SQLite + token do Outlook).
 
 ```bash
-docker build -t agente-pessoal .
-docker run -d --restart=always -p 3000:3000 --env-file .env -v agenda-data:/app/data agente-pessoal
+brew install flyctl            # ou: curl -L https://fly.io/install.sh | sh
+fly auth signup                # ou: fly auth login (pede cartao de credito)
 ```
+1. Edite `fly.toml` e troque `agenda-giselle-troque` por um nome unico seu (letras minusculas e hifens).
+2. Crie o app e o disco (1 GB, regiao Sao Paulo):
+   ```bash
+   fly apps create SEU-NOME
+   fly volumes create agenda_data --region gru --size 1
+   ```
+3. Guarde as senhas como segredos do servidor (nunca no codigo; o `.env` nao vai junto no deploy):
+   ```bash
+   fly secrets set APP_TOKEN='senha-longa-com-12+-caracteres' NTFY_TOPIC='seu-topico'
+   ```
+4. Publique com **uma unica maquina** (o disco e de uma maquina so):
+   ```bash
+   fly deploy --ha=false
+   ```
+5. Abra `https://SEU-NOME.fly.dev`, entre com a senha e use o botao de notificacao de teste.
+6. No celular: Safari → abrir o endereco → Compartilhar → "Adicionar a Tela de Inicio".
 
-Coloque HTTPS na frente (Fly/Railway/Render ja fazem isso) porque a senha do app trafega no cabecalho.
+Depois de 10 senhas erradas seguidas o IP fica bloqueado por 15 minutos. Em producao o `APP_TOKEN` precisa ter pelo menos 12 caracteres.
+
+Para atualizar depois: `fly deploy --ha=false`. Para ver logs: `fly logs`.
+Para o Outlook no servidor: rode `npm run auth:outlook` no Mac e depois `fly ssh sftp shell` para enviar `data/ms_token.json` para `/app/data/` (ou rode o comando dentro de `fly ssh console`).
 
 ## Proximos passos possiveis
 - Importar eventos do Outlook para o app (sincronizacao nos dois sentidos).
