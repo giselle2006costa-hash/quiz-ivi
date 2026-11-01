@@ -43,9 +43,14 @@ const clean = (b) => {
   if ('due_date' in b) out.due_date = /^\d{4}-\d{2}-\d{2}$/.test(b.due_date || '') ? b.due_date : null;
   for (const k of ['duration_min', 'remind_min', 'priority']) if (Number.isInteger(b[k]) && b[k] >= 0) out[k] = b[k];
   if (['event', 'task', 'note'].includes(b.kind)) out.kind = b.kind;
+  if ('category_id' in b) out.category_id = b.category_id === null ? null : Number.isInteger(b.category_id) ? b.category_id : 'invalid';
   if ('done' in b) out.done = b.done ? 1 : 0;
   return out;
 };
+
+const missingCategory = (b) => (b.category_id != null && !s.catGet(b.category_id) ? 'categoria nao existe' : null);
+const COLORS = ['#3b6e5c', '#2f6fa8', '#7a4fa0', '#c4702a', '#b8467a', '#6b7280'];
+const cleanName = (v) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, 40) : '');
 
 // Outlook e "melhor esforco": se cair, o app e os lembretes continuam funcionando.
 async function sync(item) {
@@ -61,12 +66,13 @@ async function sync(item) {
 const fmtWhen = (i) => new Date(i.start_at).toLocaleString('pt-BR', {
   weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: config.tz });
 const describe = (i) => {
-  if (i.kind === 'note') return `Anotado: ${i.title}`;
+  const cat = i.category ? ` [${i.category}]` : '';
+  if (i.kind === 'note') return `Anotado${cat}: ${i.title}`;
   if (i.kind === 'event') {
     const out = i.outlook_id ? ' (no Outlook)' : outlookEnabled() ? ' (Outlook falhou, so no app)' : '';
-    return `Compromisso: ${i.title} - ${fmtWhen(i)}${out}`;
+    return `Compromisso${cat}: ${i.title} - ${fmtWhen(i)}${out}`;
   }
-  return `Tarefa: ${i.title}${i.due_date ? ` - prazo ${i.due_date.split('-').reverse().join('/')}` : ''}`;
+  return `Tarefa${cat}: ${i.title}${i.due_date ? ` - prazo ${i.due_date.split('-').reverse().join('/')}` : ''}`;
 };
 
 // Teto diario de interpretacoes para o gasto com a API nunca fugir do controle.
@@ -132,14 +138,37 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (url.pathname === '/api/quick' && req.method === 'POST') {
-      const { text } = await readBody(req);
+      const { text, category_id } = await readBody(req);
       if (typeof text !== 'string' || !text.trim()) return json(res, 400, { error: 'text obrigatorio' });
       if (!quickBudgetOk()) return json(res, 429, { error: 'limite diario de mensagens atingido' });
-      const { entries, ai } = await interpret(text);
+      const cats = s.cats();
+      const { entries, ai } = await interpret(text, new Date(), undefined, cats);
+      const fallbackCat = Number.isInteger(category_id) && s.catGet(category_id) ? category_id : null; // filtro ativo no app
       const created = [];
-      for (const it of toItems(entries)) created.push(await sync(s.create(it)));
+      for (const it of toItems(entries, cats)) created.push(await sync(s.create({ ...it, category_id: it.category_id ?? fallbackCat })));
       if (!created.length) return json(res, 422, { error: 'nao entendi, tente de outro jeito', reply: 'Nao entendi. Tente: "dentista amanha as 14h".' });
       return json(res, 201, { ai, items: created, reply: created.map(describe).join('\n') });
+    }
+    if (url.pathname === '/api/categories' && req.method === 'GET') return json(res, 200, s.cats());
+    if (url.pathname === '/api/categories' && req.method === 'POST') {
+      const b = await readBody(req), name = cleanName(b.name);
+      if (!name) return json(res, 400, { error: 'nome obrigatorio' });
+      if (s.cats().length >= 30) return json(res, 400, { error: 'limite de 30 categorias' });
+      const color = COLORS.includes(b.color) ? b.color : COLORS[s.cats().length % COLORS.length];
+      try { return json(res, 201, s.catCreate(name, color)); }
+      catch (_) { return json(res, 409, { error: 'ja existe uma categoria com esse nome' }); }
+    }
+    const cm = url.pathname.match(/^\/api\/categories\/(\d+)$/);
+    if (cm) {
+      const cid = Number(cm[1]);
+      if (!s.catGet(cid)) return json(res, 404, { error: 'not found' });
+      if (req.method === 'PATCH') {
+        const b = await readBody(req), name = 'name' in b ? cleanName(b.name) : undefined;
+        if (name === '') return json(res, 400, { error: 'nome obrigatorio' });
+        try { return json(res, 200, s.catUpdate(cid, { name, color: COLORS.includes(b.color) ? b.color : undefined })); }
+        catch (_) { return json(res, 409, { error: 'ja existe uma categoria com esse nome' }); }
+      }
+      if (req.method === 'DELETE') { s.catRemove(cid); return json(res, 200, { ok: true }); }
     }
     if (url.pathname === '/api/items' && req.method === 'GET') return json(res, 200, s.list());
     if (url.pathname === '/api/plan' && req.method === 'GET') return json(res, 200, buildPlan(s.list()));
@@ -150,7 +179,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/items' && req.method === 'POST') {
       const b = clean(await readBody(req));
       if (!b.title) return json(res, 400, { error: 'title obrigatorio' });
-      const problem = validatePatch(b);
+      const problem = validatePatch(b) || missingCategory(b);
       if (problem) return json(res, 400, { error: problem });
       return json(res, 201, await sync(s.create(b)));
     }
@@ -162,7 +191,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'PATCH') {
         let patch;
         try { patch = clean(await readBody(req)); } catch (_) { return json(res, 400, { error: 'dados invalidos' }); }
-        const problem = validatePatch(patch);
+        const problem = validatePatch(patch) || missingCategory(patch);
         if (problem) return json(res, 400, { error: problem });
         const plan = planEdit(cur, patch);
         if (plan.removeFromOutlook) {

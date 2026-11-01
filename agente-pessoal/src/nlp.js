@@ -23,9 +23,12 @@ mantendo nomes proprios. Sem a data e o horario no titulo.
 - "date" em YYYY-MM-DD e "time" em HH:MM (24h), no fuso da usuaria. Use null quando nao houver.
 - priority: 1 alta (urgente/importante), 2 normal, 3 baixa. duration_min so para events \
 (consultas e reunioes 60 se nao informado, compromissos curtos 30). remind_min so se ela pedir aviso especifico.
+- "category": uma das categorias listadas na mensagem, copiada EXATAMENTE como escrita, quando o item \
+claramente pertencer a ela (a usuaria pode citar o nome, a sigla ou o assunto); senao null. Nao inclua o nome \
+da categoria no titulo.
 - "details": contexto extra util (local, quem, observacoes) ou null.`;
 
-export async function parseWithClaude(text, now, client) {
+export async function parseWithClaude(text, now, client, cats = []) {
   if (!client) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     client = new Anthropic();
@@ -37,7 +40,7 @@ export async function parseWithClaude(text, now, client) {
     system: SYSTEM,
     // esforco baixo: a tarefa e simples e a resposta precisa ser rapida
     output_config: { effort: 'low', format: await schemaFor() },
-    messages: [{ role: 'user', content: `Agora: ${nowStr} (${config.tz}); hoje e ${dayKey(now)}.\n\nMensagem: ${text}` }],
+    messages: [{ role: 'user', content: `Agora: ${nowStr} (${config.tz}); hoje e ${dayKey(now)}.\nCategorias: ${cats.length ? cats.map((c) => c.name).join('; ') : '(nenhuma)'}\n\nMensagem: ${text}` }],
   });
   if (response.stop_reason === 'refusal' || !response.parsed_output) throw new Error('sem resposta utilizavel');
   return response.parsed_output.items;
@@ -53,6 +56,7 @@ function buildSchema(z, zodOutputFormat) {
     priority: z.number().nullable(),
     remind_min: z.number().nullable(),
     details: z.string().nullable(),
+    category: z.string().nullable(),
   });
   return zodOutputFormat(z.object({ items: z.array(Entry) }));
 }
@@ -61,10 +65,29 @@ async function schemaFor() {
   return buildSchema(z, zodOutputFormat);
 }
 
+// ---------- Categorias ----------
+const norm = (s) => strip(String(s)).toLowerCase().trim();
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const word = (s) => new RegExp(`(?<![a-z0-9])${esc(s)}(?![a-z0-9])`);
+
+// Acha uma categoria no texto (ja sem acentos/minusculo): nome inteiro, ou a primeira palavra (ex.: "PUC").
+export function findCategoryInText(plain, cats) {
+  let best = null;
+  for (const c of cats) {
+    const full = norm(c.name), first = full.split(/\s+/)[0];
+    for (const needle of new Set([full, first.length >= 3 ? first : null])) {
+      const m = needle && plain.match(word(needle));
+      if (m && (!best || m[0].length > best.m[0].length)) best = { cat: c, m };
+    }
+  }
+  return best;
+}
+const catByName = (name, cats) => cats.find((c) => norm(c.name) === norm(name ?? '')) ?? null;
+
 // ---------- Reserva simples (sem chave / se a API falhar) ----------
 const strip = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-export function parseSimple(text, now = new Date()) {
+export function parseSimple(text, now = new Date(), cats = []) {
   const base = text.normalize('NFC').trim();
   let plain = strip(base).toLowerCase();
   const cut = (m) => { // remove o trecho casado dos dois textos, mantendo os indices alinhados
@@ -107,37 +130,46 @@ export function parseSimple(text, now = new Date()) {
   if (/\b(urgente|importante|prioridade alta)\b/.test(plain)) priority = 1;
   else if (/\b(sem pressa|quando der)\b/.test(plain)) priority = 3;
 
+  let category = null;
+  const hit = findCategoryInText(plain, cats);
+  if (hit) {
+    category = hit.cat.name;
+    // tira a sigla do titulo so se sobrar algum texto
+    const rest = (work.slice(0, hit.m.index) + ' ' + work.slice(hit.m.index + hit.m[0].length)).trim();
+    if (/[a-zA-ZÀ-ÿ]{3,}/.test(rest.replace(/\b(reuniao|reunião)\b/gi, ''))) { plain = plain.slice(0, hit.m.index) + ' ' + plain.slice(hit.m.index + hit.m[0].length); work = rest; }
+  }
   const isNote = /^\s*(anota(r|cao)?|nota|ideia|lembrar que|guardar)\b/.test(plain);
   work = work
     .replace(/\b(da manh[ãa]|da tarde|da noite|de manh[ãa])\b/gi, ' ')
     .replace(/^\s*(anotar|anota|nota|ideia|guardar|marcar|agendar|me lembra(r)?( de)?|lembrar( de| que)?)[:,]?\s+/i, '')
     .replace(/\b(urgente|importante|sem pressa|quando der)\b/gi, ' ')
-    .replace(/\s+(para|pra|no|na|em|de|as|às|dia|o|a)\s*$/i, '')
-    .replace(/^\s*(para|pra|no|na|em|de|as|às|dia)\s+/i, '')
+    .replace(/\s+(para|pra|no|na|nos|nas|em|de|do|da|dos|das|as|às|dia|o|a)\s*$/i, '')
+    .replace(/^\s*(para|pra|no|na|nos|nas|em|de|do|da|dos|das|as|às|dia)\s+/i, '')
     .replace(/\s{2,}/g, ' ').replace(/[,;:\-–]+\s*$/, '').trim();
   const title = work ? work[0].toUpperCase() + work.slice(1) : base;
 
   const kind = isNote ? 'note' : date && time ? 'event' : 'task';
-  return [{ kind, title, date, time, duration_min: duration, priority, remind_min: null, details: null }];
+  return [{ kind, title, date, time, duration_min: duration, priority, remind_min: null, details: null, category }];
 }
 
 // ---------- Entrada unica ----------
-export async function interpret(text, now = new Date(), client) {
+export async function interpret(text, now = new Date(), client, cats = []) {
   const clean = text.trim().slice(0, 1000);
   if (process.env.ANTHROPIC_API_KEY || client) {
-    try { return { entries: await parseWithClaude(clean, now, client), ai: true }; }
+    try { return { entries: await parseWithClaude(clean, now, client, cats), ai: true }; }
     catch (e) { console.error('[nlp] claude falhou, usando interpretador simples:', e.message); }
   }
-  return { entries: parseSimple(clean, now), ai: false };
+  return { entries: parseSimple(clean, now, cats), ai: false };
 }
 
 // Entradas -> itens prontos para o banco (valida data/hora; sem horario valido vira tarefa).
-export function toItems(entries) {
+export function toItems(entries, cats = []) {
   return entries.filter((e) => e?.title?.trim()).map((e) => {
     const date = DATE_RE.test(e.date ?? '') ? e.date : null;
     const time = TIME_RE.test(e.time ?? '') ? e.time.padStart(5, '0') : null;
     const prio = [1, 2, 3].includes(e.priority) ? e.priority : 2;
-    const base = { title: e.title.trim().slice(0, 200), notes: (e.details ?? '').slice(0, 2000), priority: prio };
+    const category_id = catByName(e.category, cats)?.id ?? null;
+    const base = { title: e.title.trim().slice(0, 200), notes: (e.details ?? '').slice(0, 2000), priority: prio, category_id };
     if (e.kind === 'note') return { ...base, kind: 'note' };
     if (e.kind === 'event' && date && time) {
       return { ...base, kind: 'event', start_at: zonedDate(date, time).toISOString(),

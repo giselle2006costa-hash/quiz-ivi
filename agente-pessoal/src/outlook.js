@@ -49,6 +49,7 @@ const toEvent = (i) => {
     body: { contentType: 'text', content: i.notes || '' },
     start: { dateTime: fmt(start), timeZone: 'UTC' },
     end: { dateTime: fmt(end), timeZone: 'UTC' },
+    categories: i.category ? [i.category] : [],
     isReminderOn: true,
     reminderMinutesBeforeStart: i.remind_min,
   };

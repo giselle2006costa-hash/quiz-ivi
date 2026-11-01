@@ -30,6 +30,13 @@
   details { margin-top:12px; } summary { cursor:pointer; color:var(--muted); font-size:.9rem; margin-bottom:8px; }
   #qreply, #olbox { margin:8px 0; }
   a { color:var(--acc); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 0; }
+  .chip { width:auto; padding:5px 12px; border-radius:999px; background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:400; font-size:.85rem; }
+  .chip.on { background:var(--fg); color:var(--bg); border-color:var(--fg); }
+  .chip i, .cdot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+  .tag { display:inline-block; color:#fff; border-radius:999px; padding:1px 8px; font-size:.7rem; margin-right:6px; vertical-align:middle; }
+  .catrow { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .catrow span { flex:1; }
   .item .acts { display:flex; flex-direction:column; gap:4px; }
   .item.edit { display:block; }
   .edit .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
@@ -56,6 +63,7 @@
       <button>Enviar</button>
     </form>
     <pre id="qreply" hidden></pre>
+    <div id="chips" class="chips"></div>
     <details><summary>Cadastro detalhado</summary>
     <form id="f" onsubmit="return add(event)">
       <input class="full" name="title" placeholder="O que precisa fazer?" required>
@@ -63,12 +71,21 @@
       <input name="due" type="date" title="Prazo (tarefa sem horario)">
       <select name="dur"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 h</option><option value="120">2 h</option></select>
       <select name="prio"><option value="1">Prioridade alta</option><option value="2" selected>Media</option><option value="3">Baixa</option></select>
+      <select name="cat" class="full" id="catsel"></select>
       <select name="rem" class="full"><option value="5">Avisar 5 min antes</option><option value="15" selected>Avisar 15 min antes</option><option value="60">Avisar 1 h antes</option></select>
       <button class="full">Adicionar</button>
     </form></details>
     <h2>Plano de hoje</h2><pre id="plan">...</pre>
     <h2>Tudo</h2><div id="list"></div>
     <h2>Anotações</h2><div id="notes"></div>
+    <details><summary>Categorias</summary>
+      <div id="catlist"></div>
+      <form class="quick" onsubmit="return addCat(event)" style="margin-top:8px">
+        <input id="catname" placeholder="Nova categoria" maxlength="40">
+        <select id="catcolor"><option value="#3b6e5c">Verde</option><option value="#2f6fa8">Azul</option><option value="#7a4fa0">Roxo</option><option value="#c4702a">Laranja</option><option value="#b8467a">Rosa</option><option value="#6b7280">Cinza</option></select>
+        <button>Adicionar</button>
+      </form>
+    </details>
     <div id="olbox" hidden></div>
     <p id="status"></p>
     <button class="ghost" id="olbtn" onclick="connectOl()" hidden>Conectar Outlook</button>
@@ -112,8 +129,10 @@ const fmt = (i) => i.kind === 'note' ? 'anotação' : i.start_at ? new Date(i.st
   : (i.due_date ? 'prazo ' + i.due_date.split('-').reverse().join('/') : 'sem data');
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 async function load() {
-  const [items, plan, st] = await Promise.all([api('GET', '/items'), api('GET', '/plan'), api('GET', '/status')]);
-  if (!Array.isArray(items)) throw new Error('resposta inesperada');
+  const [items, plan, st, cs] = await Promise.all([api('GET', '/items'), api('GET', '/plan'), api('GET', '/status'), api('GET', '/categories')]);
+  if (!Array.isArray(items) || !Array.isArray(cs)) throw new Error('resposta inesperada');
+  cats = cs; if (filter !== null && !cats.some((c) => c.id === filter)) filter = null;
+  drawCats();
   $('login').style.display = 'none'; $('app').hidden = false;
   $('plan').textContent = plan.text;
   $('status').textContent = `v${st.version} · Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
@@ -124,7 +143,7 @@ async function load() {
   if (st.outlookPending && $('olbox').hidden) showCode(st.outlookPending);
   if (st.outlook) $('olbox').hidden = true;
 }
-let cache = [], editing = null;
+let cache = [], editing = null, cats = [], filter = null;
 const attr = (s) => esc(s ?? '').replace(/"/g, '&quot;');
 const localInput = (iso) => { // ISO UTC -> valor do datetime-local no fuso do aparelho
   if (!iso) return '';
@@ -136,14 +155,15 @@ function row(i) {
   if (i.id === editing) return editRow(i);
   return `<div class="item ${i.done ? 'done' : ''}">
     <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
-    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
+    <div class="t">${i.category ? `<span class="tag" style="background:${attr(i.category_color)}">${esc(i.category)}</span>` : ''}${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
     <div class="acts"><button class="ghost" onclick="edit(${i.id})">editar</button><button class="ghost" onclick="del(${i.id})">apagar</button></div></div>`;
 }
 function editRow(i) {
   const note = i.kind === 'note';
   return `<form class="item edit" onsubmit="return saveEdit(event, ${i.id})">
     <label>${note ? 'Anotação' : 'Título'}</label><input name="title" value="${attr(i.title)}" required>
-    <div class="grid">${note ? '' : `
+    <div class="grid">
+      <div class="full"><label>Categoria</label><select name="cat">${catOptions(i.category_id)}</select></div>${note ? '' : `
       <div class="full"><label>Data e hora (deixe vazio para virar tarefa)</label><input name="start" type="datetime-local" value="${localInput(i.start_at)}"></div>
       <div><label>Prazo (tarefa sem hora)</label><input name="due" type="date" value="${attr(i.due_date)}"></div>
       <div><label>Duração</label><select name="dur">${opts([[15, '15 min'], [30, '30 min'], [45, '45 min'], [60, '1 h'], [90, '1h30'], [120, '2 h']], i.duration_min)}</select></div>
@@ -154,16 +174,48 @@ function editRow(i) {
     <p id="eerr" style="color:#b3402d;margin:8px 0 0"></p>
     <div class="btns"><button>Salvar</button><button type="button" class="ghost" onclick="cancelEdit()">Cancelar</button></div></form>`;
 }
+const catOptions = (cur) => '<option value="">Sem categoria</option>' + cats.map((c) => `<option value="${c.id}" ${c.id === cur ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+const visible = (i) => filter === null || i.category_id === filter || i.id === editing;
 function render() {
-  $('list').innerHTML = cache.filter((i) => i.kind !== 'note').map(row).join('') || '<p>Nada por aqui ainda.</p>';
-  $('notes').innerHTML = cache.filter((i) => i.kind === 'note').map(row).join('') || '<p>Nenhuma anotação.</p>';
+  const none = filter === null ? '' : ' nesta categoria';
+  $('list').innerHTML = cache.filter((i) => i.kind !== 'note' && visible(i)).map(row).join('') || `<p>Nada por aqui${none || ' ainda'}.</p>`;
+  $('notes').innerHTML = cache.filter((i) => i.kind === 'note' && visible(i)).map(row).join('') || `<p>Nenhuma anotação${none}.</p>`;
+}
+function drawCats() {
+  const chip = (id, label, color) => `<button type="button" class="chip ${filter === id ? 'on' : ''}" onclick="setFilter(${id})">${color ? `<i style="background:${attr(color)}"></i>` : ''}${esc(label)}</button>`;
+  $('chips').innerHTML = cats.length ? chip(null, 'Todas') + cats.map((c) => chip(c.id, c.name, c.color)).join('') : '';
+  $('catsel').innerHTML = catOptions(filter);
+  $('catlist').innerHTML = cats.map((c) => `<div class="catrow"><i class="cdot" style="background:${attr(c.color)}"></i><span>${esc(c.name)}</span>
+    <button class="ghost" onclick="renameCat(${c.id})">renomear</button><button class="ghost" onclick="delCat(${c.id})">apagar</button></div>`).join('') || '<p>Nenhuma categoria.</p>';
+}
+function setFilter(id) { filter = id; editing = null; drawCats(); render(); }
+async function addCat(e) {
+  e.preventDefault();
+  const name = $('catname').value.trim();
+  if (!name) return false;
+  const j = await api('POST', '/categories', { name, color: $('catcolor').value });
+  if (j.error) { alert(j.error[0].toUpperCase() + j.error.slice(1) + '.'); return false; }
+  $('catname').value = ''; load();
+  return false;
+}
+async function renameCat(id) {
+  const cur = cats.find((c) => c.id === id);
+  const name = prompt('Novo nome da categoria:', cur.name);
+  if (!name || !name.trim() || name.trim() === cur.name) return;
+  const j = await api('PATCH', '/categories/' + id, { name });
+  if (j.error) alert(j.error[0].toUpperCase() + j.error.slice(1) + '.'); else load();
+}
+async function delCat(id) {
+  const cur = cats.find((c) => c.id === id), n = cache.filter((i) => i.category_id === id).length;
+  if (!confirm(`Apagar "${cur.name}"? ${n ? n + ' item(ns) ficam sem categoria (nada é apagado).' : ''}`)) return;
+  await api('DELETE', '/categories/' + id); load();
 }
 const edit = (id) => { editing = id; render(); };
 const cancelEdit = () => { editing = null; render(); load().catch(() => {}); };
 async function saveEdit(e, id) {
   e.preventDefault();
   const f = new FormData(e.target), cur = cache.find((x) => x.id === id);
-  const body = { title: f.get('title').trim(), notes: f.get('notes') };
+  const body = { title: f.get('title').trim(), notes: f.get('notes'), category_id: f.get('cat') ? +f.get('cat') : null };
   if (cur.kind !== 'note') {
     Object.assign(body, { start_at: f.get('start') ? new Date(f.get('start')).toISOString() : null,
       due_date: f.get('due') || null, duration_min: +f.get('dur'), priority: +f.get('prio'), remind_min: +f.get('rem') });
@@ -188,7 +240,7 @@ async function quick(e) {
   if (!text) return false;
   $('qreply').hidden = false; $('qreply').textContent = 'Entendendo...';
   try {
-    const j = await api('POST', '/quick', { text });
+    const j = await api('POST', '/quick', filter === null ? { text } : { text, category_id: filter });
     $('qreply').textContent = j.reply || j.error || 'Erro';
     if (j.items) { $('qtext').value = ''; load(); }
   } catch (_) { $('qreply').textContent = 'Sem conexão.'; }
@@ -206,7 +258,7 @@ function mic() {
 async function add(e) {
   e.preventDefault();
   const f = new FormData($('f'));
-  const body = { title: f.get('title'), duration_min: +f.get('dur'), priority: +f.get('prio'), remind_min: +f.get('rem') };
+  const body = { title: f.get('title'), duration_min: +f.get('dur'), priority: +f.get('prio'), remind_min: +f.get('rem'), category_id: f.get('cat') ? +f.get('cat') : null };
   if (f.get('start')) body.start_at = new Date(f.get('start')).toISOString();
   else if (f.get('due')) body.due_date = f.get('due');
   await api('POST', '/items', body); $('f').reset(); load();

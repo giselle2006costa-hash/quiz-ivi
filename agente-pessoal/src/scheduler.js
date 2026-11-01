@@ -11,7 +11,7 @@ export async function tick(s, now = new Date()) {
     const when = mins > 0 ? `em ${mins} min (${hhmm(new Date(item.start_at))})` : 'agora';
     // marca antes de enviar: se o envio falhar nao ficamos reenviando todo minuto
     s.markReminded(item.id);
-    await notify(`${item.title} - ${when}`, 'Lembrete');
+    await notify(`${item.category ? `[${item.category}] ` : ''}${item.title} - ${when}`, 'Lembrete');
   }
 
   const today = dayKey(now);

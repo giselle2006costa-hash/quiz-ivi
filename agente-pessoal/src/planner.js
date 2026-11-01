@@ -31,6 +31,8 @@ export function freeSlots(events, dayStr, minMin = 30) {
   return slots.filter(([a, b]) => b > a);
 }
 
+const tag = (i) => (i.category ? `[${i.category}] ` : '');
+
 export function buildPlan(items, now = new Date()) {
   const today = dayKey(now);
   const open = items.filter((i) => !i.done);
@@ -43,12 +45,12 @@ export function buildPlan(items, now = new Date()) {
 
   const lines = [`Bom dia! Seu dia (${today.split('-').reverse().join('/')}):`];
   lines.push('', events.length ? 'Compromissos:' : 'Sem compromissos com horario.');
-  events.forEach((e) => lines.push(`- ${hhmm(new Date(e.start_at))} ${e.title} (${e.duration_min} min)`));
+  events.forEach((e) => lines.push(`- ${hhmm(new Date(e.start_at))} ${tag(e)}${e.title} (${e.duration_min} min)`));
 
   if (tasks.length) {
     lines.push('', 'Tarefas (por prioridade):');
     const flag = { 1: '[alta]', 2: '[media]', 3: '[baixa]' };
-    tasks.forEach((t) => lines.push(`- ${flag[t.priority] ?? ''} ${t.title}${overdue.includes(t) ? ' (atrasada)' : ''}`));
+    tasks.forEach((t) => lines.push(`- ${flag[t.priority] ?? ''} ${tag(t)}${t.title}${overdue.includes(t) ? ' (atrasada)' : ''}`));
   }
   if (slots.length) {
     lines.push('', 'Horarios livres:');

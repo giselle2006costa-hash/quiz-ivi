@@ -1,9 +1,10 @@
 // Regras de uma edicao: o tipo acompanha o horario e o Outlook so e tocado quando precisa.
-const OUTLOOK_FIELDS = ['title', 'notes', 'start_at', 'duration_min', 'remind_min'];
+const OUTLOOK_FIELDS = ['title', 'notes', 'start_at', 'duration_min', 'remind_min', 'category_id'];
 
 export function validatePatch(patch) {
   if ('title' in patch && !patch.title) return 'o titulo nao pode ficar vazio';
   if ('start_at' in patch && patch.start_at !== null && Number.isNaN(Date.parse(patch.start_at))) return 'data ou hora invalida';
+  if ('category_id' in patch && patch.category_id !== null && !Number.isInteger(patch.category_id)) return 'categoria invalida';
   return null;
 }
 
