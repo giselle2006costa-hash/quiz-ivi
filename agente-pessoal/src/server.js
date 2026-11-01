@@ -4,8 +4,9 @@ import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { config, ROOT } from './config.js';
 import { openDb, store } from './db.js';
-import { syncToOutlook, deleteFromOutlook, outlookEnabled } from './outlook.js';
-import { buildPlan } from './planner.js';
+import { syncToOutlook, deleteFromOutlook, outlookEnabled, connectOutlook, outlookPending, outlookLastError } from './outlook.js';
+import { interpret, toItems } from './nlp.js';
+import { buildPlan, dayKey } from './planner.js';
 import { startScheduler } from './scheduler.js';
 import { notify } from './notify.js';
 import { createLimiter } from './ratelimit.js';
@@ -37,6 +38,7 @@ const clean = (b) => {
   if ('start_at' in b) out.start_at = b.start_at ? new Date(b.start_at).toISOString() : null;
   if ('due_date' in b) out.due_date = /^\d{4}-\d{2}-\d{2}$/.test(b.due_date || '') ? b.due_date : null;
   for (const k of ['duration_min', 'remind_min', 'priority']) if (Number.isInteger(b[k]) && b[k] >= 0) out[k] = b[k];
+  if (['event', 'task', 'note'].includes(b.kind)) out.kind = b.kind;
   if ('done' in b) out.done = b.done ? 1 : 0;
   return out;
 };
@@ -50,6 +52,32 @@ async function sync(item) {
     console.error('[outlook]', e.message);
     return item;
   }
+}
+
+const fmtWhen = (i) => new Date(i.start_at).toLocaleString('pt-BR', {
+  weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: config.tz });
+const describe = (i) => {
+  if (i.kind === 'note') return `Anotado: ${i.title}`;
+  if (i.kind === 'event') {
+    const out = i.outlook_id ? ' (no Outlook)' : outlookEnabled() ? ' (Outlook falhou, so no app)' : '';
+    return `Compromisso: ${i.title} - ${fmtWhen(i)}${out}`;
+  }
+  return `Tarefa: ${i.title}${i.due_date ? ` - prazo ${i.due_date.split('-').reverse().join('/')}` : ''}`;
+};
+
+// Teto diario de interpretacoes para o gasto com a API nunca fugir do controle.
+const QUICK_PER_DAY = 200;
+function quickBudgetOk() {
+  const k = `quick_${dayKey(new Date())}`;
+  const n = Number(s.kvGet(k) || 0);
+  if (n >= QUICK_PER_DAY) return false;
+  s.kvSet(k, String(n + 1));
+  return true;
+}
+
+// Depois de conectar o Outlook, envia o que ja estava na agenda.
+async function backfillOutlook() {
+  for (const i of s.list().filter((x) => x.kind === 'event' && !x.done && !x.outlook_id && new Date(x.start_at) > new Date())) await sync(i);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -73,7 +101,25 @@ const server = http.createServer(async (req, res) => {
     limiter.reset(ip);
 
     if (url.pathname === '/api/status' && req.method === 'GET')
-      return json(res, 200, { outlook: outlookEnabled(), push: !!config.ntfy.topic, whatsapp: !!config.whatsapp.token });
+      return json(res, 200, {
+        outlook: outlookEnabled(), outlookConfigured: !!config.msClientId, outlookPending: outlookPending(),
+        outlookError: outlookLastError(), push: !!config.ntfy.topic, whatsapp: !!config.whatsapp.token,
+        ai: !!process.env.ANTHROPIC_API_KEY,
+      });
+    if (url.pathname === '/api/outlook/connect' && req.method === 'POST') {
+      try { return json(res, 200, await connectOutlook(backfillOutlook)); }
+      catch (e) { return json(res, 400, { error: e.message }); }
+    }
+    if (url.pathname === '/api/quick' && req.method === 'POST') {
+      const { text } = await readBody(req);
+      if (typeof text !== 'string' || !text.trim()) return json(res, 400, { error: 'text obrigatorio' });
+      if (!quickBudgetOk()) return json(res, 429, { error: 'limite diario de mensagens atingido' });
+      const { entries, ai } = await interpret(text);
+      const created = [];
+      for (const it of toItems(entries)) created.push(await sync(s.create(it)));
+      if (!created.length) return json(res, 422, { error: 'nao entendi, tente de outro jeito', reply: 'Nao entendi. Tente: "dentista amanha as 14h".' });
+      return json(res, 201, { ai, items: created, reply: created.map(describe).join('\n') });
+    }
     if (url.pathname === '/api/items' && req.method === 'GET') return json(res, 200, s.list());
     if (url.pathname === '/api/plan' && req.method === 'GET') return json(res, 200, buildPlan(s.list()));
     if (url.pathname === '/api/test-notify' && req.method === 'POST') {

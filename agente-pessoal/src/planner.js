@@ -3,15 +3,21 @@ import { config } from './config.js';
 const hhmm = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: config.tz });
 export const dayKey = (d) => d.toLocaleDateString('sv-SE', { timeZone: config.tz }); // YYYY-MM-DD
 
+export const addDays = (dayStr, n) => {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
+export const weekdayOf = (dayStr) => new Date(`${dayStr}T12:00:00Z`).getUTCDay();
+
 // Instante (Date) de um HH:MM no dia dado, no fuso configurado.
-function at(dayStr, time) {
+export function zonedDate(dayStr, time) {
   const guess = new Date(`${dayStr}T${time}:00Z`);
   const shown = new Date(guess.toLocaleString('sv-SE', { timeZone: config.tz }).replace(' ', 'T') + 'Z');
   return new Date(guess.getTime() - (shown.getTime() - guess.getTime()));
 }
 
 export function freeSlots(events, dayStr, minMin = 30) {
-  const ws = at(dayStr, config.dayStart), we = at(dayStr, config.dayEnd);
+  const ws = zonedDate(dayStr, config.dayStart), we = zonedDate(dayStr, config.dayEnd);
   const busy = events
     .map((e) => [new Date(e.start_at), new Date(new Date(e.start_at).getTime() + e.duration_min * 60_000)])
     .sort((a, b) => a[0] - b[0]);
@@ -30,7 +36,7 @@ export function buildPlan(items, now = new Date()) {
   const open = items.filter((i) => !i.done);
   const events = open.filter((i) => i.start_at && dayKey(new Date(i.start_at)) === today)
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
-  const tasks = open.filter((i) => !i.start_at && (!i.due_date || i.due_date <= today))
+  const tasks = open.filter((i) => !i.start_at && i.kind !== 'note' && (!i.due_date || i.due_date <= today))
     .sort((a, b) => a.priority - b.priority);
   const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
   const slots = freeSlots(events, today).filter(([, b]) => b > now);

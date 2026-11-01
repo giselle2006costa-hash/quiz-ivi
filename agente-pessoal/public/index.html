@@ -24,7 +24,12 @@
   .item input[type=checkbox] { width:22px; height:22px; flex:none; }
   pre { white-space:pre-wrap; font:inherit; margin:0; }
   #status { font-size:.8rem; color:var(--muted); }
-  #login { display:none; } 
+  #login { display:none; }
+  form.quick { grid-template-columns:1fr auto auto; margin-bottom:8px; }
+  form.quick button.ghost { padding:9px 12px; font-size:1.1rem; }
+  details { margin-top:12px; } summary { cursor:pointer; color:var(--muted); font-size:.9rem; margin-bottom:8px; }
+  #qreply, #olbox { margin:8px 0; }
+  a { color:var(--acc); }
 </style>
 </head>
 <body>
@@ -32,6 +37,13 @@
   <h1>Minha Agenda</h1>
   <div id="login"><form onsubmit="return saveToken(event)"><input class="full" id="tok" type="password" placeholder="Senha (APP_TOKEN)"><button class="full">Entrar</button></form></div>
   <div id="app" hidden>
+    <form id="q" class="quick" onsubmit="return quick(event)">
+      <input id="qtext" placeholder="Fale ou escreva: dentista amanhã às 14h" autocomplete="off">
+      <button type="button" id="mic" class="ghost" onclick="mic()" title="Falar">🎤</button>
+      <button>Enviar</button>
+    </form>
+    <pre id="qreply" hidden></pre>
+    <details><summary>Cadastro detalhado</summary>
     <form id="f" onsubmit="return add(event)">
       <input class="full" name="title" placeholder="O que precisa fazer?" required>
       <input name="start" type="datetime-local" title="Deixe vazio para tarefa sem horario">
@@ -40,10 +52,13 @@
       <select name="prio"><option value="1">Prioridade alta</option><option value="2" selected>Media</option><option value="3">Baixa</option></select>
       <select name="rem" class="full"><option value="5">Avisar 5 min antes</option><option value="15" selected>Avisar 15 min antes</option><option value="60">Avisar 1 h antes</option></select>
       <button class="full">Adicionar</button>
-    </form>
+    </form></details>
     <h2>Plano de hoje</h2><pre id="plan">...</pre>
     <h2>Tudo</h2><div id="list"></div>
+    <h2>Anotações</h2><div id="notes"></div>
+    <div id="olbox" hidden></div>
     <p id="status"></p>
+    <button class="ghost" id="olbtn" onclick="connectOl()" hidden>Conectar Outlook</button>
     <button class="ghost" onclick="testNotify()">Enviar notificacao de teste</button>
     <button class="ghost" onclick="logout()">Sair</button>
   </div>
@@ -58,7 +73,7 @@ async function api(method, path, body) {
 }
 function saveToken(e) { e.preventDefault(); token = $('tok').value; localStorage.setItem('tok', token); load(); }
 function logout() { localStorage.removeItem('tok'); token = ''; $('app').hidden = true; $('login').style.display = 'block'; }
-const fmt = (i) => i.start_at ? new Date(i.start_at).toLocaleString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+const fmt = (i) => i.kind === 'note' ? 'anotação' : i.start_at ? new Date(i.start_at).toLocaleString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
   : (i.due_date ? 'prazo ' + i.due_date.split('-').reverse().join('/') : 'sem data');
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 async function load() {
@@ -67,10 +82,43 @@ async function load() {
   const [items, plan, st] = await Promise.all([api('GET', '/items'), api('GET', '/plan'), api('GET', '/status')]);
   $('plan').textContent = plan.text;
   $('status').textContent = `Push: ${st.push ? 'ativo' : 'desligado'} · WhatsApp: ${st.whatsapp ? 'ativo' : 'desligado'} · Outlook: ${st.outlook ? 'conectado' : 'desligado'}`;
-  $('list').innerHTML = items.map((i) => `<div class="item ${i.done ? 'done' : ''}">
+  const row = (i) => `<div class="item ${i.done ? 'done' : ''}">
     <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle(${i.id}, this.checked)">
-    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}</small></div>
-    <button class="ghost" onclick="del(${i.id})">apagar</button></div>`).join('') || '<p>Nada por aqui ainda.</p>';
+    <div class="t">${esc(i.title)}<small>${fmt(i)}${i.outlook_id ? ' · no Outlook' : ''}${i.notes ? ' · ' + esc(i.notes) : ''}</small></div>
+    <button class="ghost" onclick="del(${i.id})">apagar</button></div>`;
+  $('list').innerHTML = items.filter((i) => i.kind !== 'note').map(row).join('') || '<p>Nada por aqui ainda.</p>';
+  $('notes').innerHTML = items.filter((i) => i.kind === 'note').map(row).join('') || '<p>Nenhuma anotação.</p>';
+  $('olbtn').hidden = !(st.outlookConfigured && !st.outlook);
+  if (!st.outlookConfigured) $('status').textContent += ' (para ligar o Outlook falta MS_CLIENT_ID no servidor)';
+  if (st.outlookPending && $('olbox').hidden) showCode(st.outlookPending);
+  if (st.outlook) $('olbox').hidden = true;
+}
+function showCode(j) {
+  $('olbox').hidden = false;
+  $('olbox').innerHTML = j.error ? esc(j.error)
+    : `Abra <a href="${esc(j.verification_uri)}" target="_blank" rel="noopener">${esc(j.verification_uri)}</a> e digite o código <b>${esc(j.user_code)}</b>. Depois volte aqui.`;
+}
+async function connectOl() { showCode(await api('POST', '/outlook/connect')); }
+async function quick(e) {
+  e.preventDefault();
+  const text = $('qtext').value.trim();
+  if (!text) return false;
+  $('qreply').hidden = false; $('qreply').textContent = 'Entendendo...';
+  try {
+    const j = await api('POST', '/quick', { text });
+    $('qreply').textContent = j.reply || j.error || 'Erro';
+    if (j.items) { $('qtext').value = ''; load(); }
+  } catch (_) { $('qreply').textContent = 'Sem conexão.'; }
+  return false;
+}
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) $('mic').hidden = true;
+function mic() {
+  const r = new SR(); r.lang = 'pt-BR'; r.interimResults = false;
+  r.onresult = (ev) => { $('qtext').value = ev.results[0][0].transcript; $('q').requestSubmit(); };
+  r.onerror = () => { $('qreply').hidden = false; $('qreply').textContent = 'Não consegui ouvir. Use o microfone do teclado.'; };
+  r.onend = () => { $('mic').textContent = '🎤'; };
+  $('mic').textContent = '…'; r.start();
 }
 async function add(e) {
   e.preventDefault();

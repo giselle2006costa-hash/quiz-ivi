@@ -68,3 +68,37 @@ export async function deleteFromOutlook(item) {
   if (!outlookEnabled() || !item.outlook_id) return;
   await graph('DELETE', `/me/events/${item.outlook_id}`);
 }
+
+// Login por codigo (device flow): o servidor guarda o token no proprio disco.
+let pending = null; // { user_code, verification_uri, expires_at, error? }
+export const outlookPending = () => (pending && !pending.error && pending.expires_at > Date.now() ? pending : null);
+export const outlookLastError = () => pending?.error ?? null;
+
+export async function connectOutlook(onConnected) {
+  if (!config.msClientId) throw new Error('MS_CLIENT_ID nao configurado');
+  const dc = await (await fetch(`${AUTH}/devicecode`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: config.msClientId, scope: SCOPE }),
+  })).json();
+  if (!dc.device_code) throw new Error(dc.error_description || 'falha ao iniciar login');
+  pending = { user_code: dc.user_code, verification_uri: dc.verification_uri, expires_at: Date.now() + dc.expires_in * 1000 };
+  const mine = pending;
+  (async () => {
+    while (pending === mine && Date.now() < mine.expires_at) {
+      await new Promise((r) => setTimeout(r, (dc.interval || 5) * 1000));
+      const j = await (await fetch(`${AUTH}/token`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: config.msClientId, device_code: dc.device_code,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
+      })).json().catch(() => ({ error: 'network' }));
+      if (j.error === 'authorization_pending' || j.error === 'network') continue;
+      if (j.error) { mine.error = j.error_description || j.error; return; }
+      writeFileSync(config.tokenPath, JSON.stringify({
+        refresh_token: j.refresh_token, access_token: j.access_token, expires_at: Date.now() + j.expires_in * 1000 }));
+      pending = null;
+      await onConnected?.();
+      return;
+    }
+  })().catch((e) => { mine.error = e.message; });
+  return { user_code: mine.user_code, verification_uri: mine.verification_uri };
+}

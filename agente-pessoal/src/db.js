@@ -13,6 +13,7 @@ export function openDb(file = config.dbPath) {
       duration_min INTEGER NOT NULL DEFAULT 30,
       remind_min   INTEGER NOT NULL DEFAULT 15,
       priority     INTEGER NOT NULL DEFAULT 2,   -- 1 alta, 2 media, 3 baixa
+      kind         TEXT NOT NULL DEFAULT 'task',   -- event | task | note
       done         INTEGER NOT NULL DEFAULT 0,
       reminded     INTEGER NOT NULL DEFAULT 0,
       outlook_id   TEXT,
@@ -20,6 +21,11 @@ export function openDb(file = config.dbPath) {
     );
     CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
   `);
+  // bancos criados antes da coluna kind
+  if (!db.prepare('PRAGMA table_info(items)').all().some((c) => c.name === 'kind')) {
+    db.exec("ALTER TABLE items ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'");
+    db.exec("UPDATE items SET kind='event' WHERE start_at IS NOT NULL");
+  }
   return db;
 }
 
@@ -28,10 +34,11 @@ export const store = (db) => ({
   get: (id) => db.prepare('SELECT * FROM items WHERE id = ?').get(id),
   create(i) {
     const r = db.prepare(
-      `INSERT INTO items (title, notes, start_at, due_date, duration_min, remind_min, priority)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO items (title, notes, start_at, due_date, duration_min, remind_min, priority, kind)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(i.title, i.notes ?? '', i.start_at ?? null, i.due_date ?? null,
-      i.duration_min ?? 30, i.remind_min ?? 15, i.priority ?? 2);
+      i.duration_min ?? 30, i.remind_min ?? 15, i.priority ?? 2,
+      i.kind ?? (i.start_at ? 'event' : 'task'));
     return this.get(Number(r.lastInsertRowid));
   },
   update(id, patch) {
@@ -42,9 +49,9 @@ export const store = (db) => ({
     const reminded = patch.start_at !== undefined || patch.remind_min !== undefined ? 0 : n.reminded;
     db.prepare(
       `UPDATE items SET title=?, notes=?, start_at=?, due_date=?, duration_min=?, remind_min=?,
-       priority=?, done=?, reminded=?, outlook_id=? WHERE id=?`
+       priority=?, kind=?, done=?, reminded=?, outlook_id=? WHERE id=?`
     ).run(n.title, n.notes, n.start_at, n.due_date, n.duration_min, n.remind_min,
-      n.priority, n.done ? 1 : 0, reminded, n.outlook_id, id);
+      n.priority, n.kind, n.done ? 1 : 0, reminded, n.outlook_id, id);
     return this.get(id);
   },
   remove: (id) => db.prepare('DELETE FROM items WHERE id = ?').run(id),
